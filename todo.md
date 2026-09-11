@@ -15,20 +15,41 @@
 - Sync dist/ as a self-contained deploy-ready copy (no dev-only files)
 - QA pass: fixed mobile overflow bug with long unit labels/product names, added empty-product-name inline validation
 
+### Phase 2 — Shopee/Lazada auto-fetch (fast-follow to Phase 1)
+Goal: best-effort auto-fetch of product name/price/currency from a pasted Shopee/Lazada
+link, layered on top of the working manual-entry MVP — never a blocker to manual entry.
+
+- Built api/fetch-product.php: cURL fetch with realistic User-Agent, manual redirect
+  loop (5-hop cap, SSRF allowlist re-checked on every hop), timeout + size caps
+- Built domain-to-currency allowlist/map (Shopee/Lazada TH/MY/SG/PH/VN/ID)
+- Built JSON-LD / OG tag / currency-symbol-regex parser for product name + price,
+  with correct VND/IDR thousands-separator normalization
+- Built manual fallback UI for when auto-fetch fails or returns partial data
+- Wired the fetch trigger to the backend + parsers, non-destructive fill (never
+  overwrites user-typed values, never blocks manual submission)
+- Live manual QA pass against real Shopee/Lazada links (TH, MY, SG, VN, ID): Lazada
+  auto-fetch works end-to-end (name via JSON-LD, price via a tracking-blob regex);
+  Shopee is confirmed unfetchable (empty SPA shell) and is short-circuited rather
+  than attempted
+- Security review (SSRF allowlist correctness, redirect/timeout/size-cap handling,
+  data-leakage, deployment readiness) — verdict: ship
+- Fixed a real bug: a `shope.ee` shortlink redirecting to Shopee's own generic error
+  page could bypass the short-circuit and return placeholder text as a product name
+
+### Phase 2.5 — UX additions (requested mid-build, not in original scope)
+- Added an optional shipping-fee field, factored into the per-unit effective price
+  (divided by the unit count each promo type implies, so bundle math stays correct)
+- Reframed the form as two entry paths: an auto-fetch action first, manual fields
+  below a divider
+- Replaced the plain paste-link entry point with a "Fetch from clipboard" button
+  (Clipboard API), falling back to the manual paste field + button on denied
+  permission, an unsupported browser, invalid/empty clipboard content, or a timeout
+- Live-tested in browser (not just linted): clipboard timeout/fallback, the
+  paste+fetch fallback path against the real backend, and the shipping-fee math/display
+
 ## In Progress
 
 ## Pending
 
-### Phase 2 — Later / Fast-Follow (auto-fetch enhancement)
-Goal: once manual-entry MVP ships, layer in best-effort auto-fetch for Shopee/Lazada
-links so users can skip manual entry when it happens to work. Deliberately deferred:
-scraping is expected to fail or return partial data often (anti-bot, JS-rendered
-prices), so it's an enhancement on top of a working product, not a blocker to one.
-
-- Build api/fetch-product.php: cURL fetch with realistic User-Agent + timeout handling
-- Build domain-to-currency mapping (Shopee/Lazada TH/MY/SG/PH/VN/ID)
-- Build OG tag / JSON-LD parser for product name + price from fetched HTML
-- Build currency symbol fallback parser (฿, RM, S$, ₱, ₫, Rp)
-- Build manual fallback UI for when auto-fetch fails or returns partial data
-- Wire fetch trigger (from Phase 1's plain reference field) to the cURL backend + parsers above, so it actually attempts auto-fetch instead of staying a plain text field
-- Manual QA pass: test with real Shopee/Lazada links (TH, MY, SG) to confirm scraping vs. fallback behavior
+Nothing currently pending — Phase 1 and Phase 2 (plus the mid-build UX additions) are
+both complete and verified.

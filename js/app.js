@@ -11,32 +11,38 @@
     none: {
       label: 'No promotion',
       helper: '',
-      compute: function (price) { return price; }
+      compute: function (price) { return price; },
+      units: function (promo) { return 1; }
     },
     bogo: {
       label: 'Buy 1 Get 1 Free',
       helper: 'Effective price = price ÷ 2',
-      compute: function (price) { return price / 2; }
+      compute: function (price) { return price / 2; },
+      units: function (promo) { return 2; }
     },
     second50: {
       label: 'Second item 50% off',
       helper: 'Effective price = price × 0.75',
-      compute: function (price) { return price * 0.75; }
+      compute: function (price) { return price * 0.75; },
+      units: function (promo) { return 2; }
     },
     buy3pay2: {
       label: 'Buy 3 Pay for 2',
       helper: 'Effective price = price × 2 ÷ 3',
-      compute: function (price) { return (price * 2) / 3; }
+      compute: function (price) { return (price * 2) / 3; },
+      units: function (promo) { return 3; }
     },
     fixedBundle: {
       label: 'Fixed bundle price',
       helper: 'Effective price = total bundle price (X) ÷ number of units (N)',
-      compute: function (price, promo) { return promo.x / promo.n; }
+      compute: function (price, promo) { return promo.x / promo.n; },
+      units: function (promo) { return promo.n; }
     },
     secondFixed: {
       label: 'Second item at a fixed price',
       helper: 'Effective price = (price + second item price) ÷ 2',
-      compute: function (price, promo) { return (price + promo.y) / 2; }
+      compute: function (price, promo) { return (price + promo.y) / 2; },
+      units: function (promo) { return 2; }
     }
   };
 
@@ -46,6 +52,8 @@
   var lastCurrency = 'THB';    // remembers the last currency picked, for the next add
   var lastChangedId = null;    // id of the item to flash after the next render
   var removedUndoTimeout = null;
+  var currencyTouched = false; // true once the user manually changes the currency select
+  var activeFetchController = null; // AbortController for any in-flight "Fetch details" request
 
   // ---------- DOM refs ----------
   var form = document.getElementById('item-form');
@@ -56,10 +64,17 @@
   var nameError = document.getElementById('name-error');
   var priceInput = document.getElementById('item-price');
   var currencySelect = document.getElementById('item-currency');
+  var shippingInput = document.getElementById('item-shipping');
   var unitInput = document.getElementById('item-unit');
   var promoSelect = document.getElementById('item-promo');
   var promoHelper = document.getElementById('promo-helper');
   var linkInput = document.getElementById('item-link');
+  var fetchBtn = document.getElementById('fetch-details-btn');
+  var fetchStatus = document.getElementById('fetch-status');
+  var fetchBtnDefaultLabel = fetchBtn.textContent;
+  var fetchClipboardBtn = document.getElementById('fetch-clipboard-btn');
+  var fetchClipboardBtnDefaultLabel = fetchClipboardBtn.textContent;
+  var linkFallback = document.getElementById('link-fallback');
 
   var fixedBundleFields = document.getElementById('fixed-bundle-fields');
   var bundleNInput = document.getElementById('bundle-n');
@@ -93,7 +108,10 @@
 
   function computeEffectivePrice(item) {
     var def = PROMO_TYPES[item.promo.type] || PROMO_TYPES.none;
-    return def.compute(item.price, item.promo);
+    var base = def.compute(item.price, item.promo);
+    var units = def.units(item.promo);
+    var shipping = item.shippingFee || 0;
+    return base + (shipping / units);
   }
 
   // ---------- Promo select UI (show/hide extra fields + helper text) ----------
@@ -106,6 +124,12 @@
 
   promoSelect.addEventListener('change', updatePromoUI);
 
+  // Track manual currency changes so a later "Fetch details" result never
+  // overwrites a currency the user picked themselves.
+  currencySelect.addEventListener('change', function () {
+    currencyTouched = true;
+  });
+
   // ---------- Form reset / edit mode ----------
   function resetForm() {
     editingId = null;
@@ -117,6 +141,18 @@
     cancelBtn.hidden = true;
     formSummary.textContent = 'Add Item';
     nameError.hidden = true;
+
+    if (activeFetchController) {
+      activeFetchController.abort();
+      activeFetchController = null;
+    }
+    fetchStatus.textContent = '';
+    fetchBtn.disabled = false;
+    fetchBtn.textContent = fetchBtnDefaultLabel;
+    fetchClipboardBtn.disabled = false;
+    fetchClipboardBtn.textContent = fetchClipboardBtnDefaultLabel;
+    linkFallback.hidden = true;
+    currencyTouched = false;
   }
 
   // Clear the "enter a product name" message as soon as the user types a valid name.
@@ -134,6 +170,7 @@
     nameInput.value = item.name;
     priceInput.value = item.price;
     currencySelect.value = item.currency;
+    shippingInput.value = item.shippingFee || '';
     unitInput.value = item.unitLabel || '';
     promoSelect.value = item.promo.type;
     updatePromoUI();
@@ -146,6 +183,9 @@
     }
 
     linkInput.value = item.referenceLink || '';
+    if (item.referenceLink) {
+      showLinkFallback();
+    }
 
     submitBtn.textContent = 'Save changes';
     cancelBtn.hidden = false;
@@ -162,6 +202,197 @@
     }
   });
 
+  // ---------- Fetch details (auto-fill from Shopee/Lazada link) ----------
+  // Purely additive: never blocks or disables manual entry/submission.
+  var LINK_PATTERN = /^https?:\/\/.+/i;
+
+  function currencyOptionExists(value) {
+    if (!value) return false;
+    var options = currencySelect.options;
+    for (var i = 0; i < options.length; i++) {
+      if (options[i].value === value) return true;
+    }
+    return false;
+  }
+
+  function fetchStatusMessage(data) {
+    if (data.status === 'ok') {
+      return 'Filled in the name and price from Lazada — please double-check.';
+    }
+    if (data.status === 'partial') {
+      if (data.name && (data.price === null || data.price === undefined)) {
+        return 'Got the product name, but not the price — please enter the price.';
+      }
+      if ((data.price !== null && data.price !== undefined) && !data.name) {
+        return 'Got the price, but not the name — please enter the name.';
+      }
+    }
+    if (data.status === 'error') {
+      if (data.reason === 'blocked' && data.source === 'shopee') {
+        return data.currency ?
+          'Shopee pages can’t be read automatically. Currency set to ' + data.currency + ' — please enter the name and price.' :
+          'Shopee pages can’t be read automatically. Please enter the name and price.';
+      }
+      if (data.reason === 'blocked' && data.source === 'lazada') {
+        return 'Lazada blocked the request. Please enter the details manually.';
+      }
+      if (data.reason === 'not_found') {
+        return "That product page isn't available any more.";
+      }
+      if (data.reason === 'timeout') {
+        return 'That took too long. Please enter the details manually.';
+      }
+      if (data.reason === 'unsupported_domain') {
+        return 'Only Shopee and Lazada links can be fetched. The link is still saved.';
+      }
+      if (data.reason === 'invalid_url') {
+        return "That doesn't look like a link.";
+      }
+    }
+    return "Couldn't read that page. Please enter the details manually.";
+  }
+
+  function flashEl(el) {
+    el.classList.add('flash');
+    setTimeout(function () { el.classList.remove('flash'); }, 900);
+  }
+
+  function applyFetchResult(data) {
+    if (data.name && !nameInput.value.trim()) {
+      nameInput.value = data.name;
+      flashEl(nameInput);
+    }
+    if (data.price !== null && data.price !== undefined && !priceInput.value.trim()) {
+      priceInput.value = data.price;
+      flashEl(priceInput);
+    }
+    if (data.currency && !currencyTouched && currencyOptionExists(data.currency)) {
+      currencySelect.value = data.currency;
+    }
+
+    fetchStatus.textContent = fetchStatusMessage(data);
+  }
+
+  function showLinkFallback() {
+    linkFallback.hidden = false;
+  }
+
+  // Runs the actual "look up this link" request. Shared by the fallback
+  // "Fetch details" button and the "Fetch from clipboard" button. Returns the
+  // fetch promise chain, resolving with the final status ('ok'/'partial'/'error')
+  // once settled, so callers can decide whether to reveal the fallback UI.
+  function triggerFetch(link) {
+    if (activeFetchController) {
+      activeFetchController.abort();
+    }
+    var controller = new AbortController();
+    activeFetchController = controller;
+
+    fetchBtn.disabled = true;
+    fetchBtn.textContent = 'Fetching…';
+    fetchStatus.textContent = 'Checking the link…';
+
+    var timeoutId = setTimeout(function () { controller.abort(); }, 15000);
+
+    return fetch('api/fetch-product.php?url=' + encodeURIComponent(link), { signal: controller.signal })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (activeFetchController !== controller) return null;
+        applyFetchResult(data);
+        return data.status;
+      })
+      .catch(function () {
+        if (activeFetchController !== controller) return null;
+        var data = { status: 'error', reason: 'timeout', name: null, price: null, currency: null, source: null };
+        applyFetchResult(data);
+        return data.status;
+      })
+      .then(function (status) {
+        clearTimeout(timeoutId);
+        if (activeFetchController === controller) {
+          activeFetchController = null;
+        }
+        fetchBtn.disabled = false;
+        fetchBtn.textContent = fetchBtnDefaultLabel;
+        return status;
+      });
+  }
+
+  fetchBtn.addEventListener('click', function () {
+    var link = linkInput.value.trim();
+    if (!link || !LINK_PATTERN.test(link)) {
+      fetchStatus.textContent = "That doesn't look like a link.";
+      return;
+    }
+
+    triggerFetch(link);
+  });
+
+  // ---------- Fetch from clipboard (primary entry point) ----------
+  function restoreClipboardBtn() {
+    fetchClipboardBtn.disabled = false;
+    fetchClipboardBtn.textContent = fetchClipboardBtnDefaultLabel;
+  }
+
+  fetchClipboardBtn.addEventListener('click', function () {
+    if (!navigator.clipboard || typeof navigator.clipboard.readText !== 'function') {
+      showLinkFallback();
+      fetchStatus.textContent = "Clipboard access isn't available in this browser — paste your link below instead.";
+      return;
+    }
+
+    fetchClipboardBtn.disabled = true;
+    fetchClipboardBtn.textContent = 'Reading clipboard…';
+
+    // The permission prompt (or the read itself) can hang indefinitely in some
+    // browsers, so race it against a timeout rather than risk getting stuck on
+    // "Reading clipboard…" forever.
+    var clipboardTimedOut = false;
+    var clipboardTimeout = new Promise(function (resolve) {
+      setTimeout(function () {
+        clipboardTimedOut = true;
+        resolve('');
+      }, 5000);
+    });
+
+    Promise.race([navigator.clipboard.readText(), clipboardTimeout]).then(function (text) {
+      restoreClipboardBtn();
+
+      if (clipboardTimedOut) {
+        showLinkFallback();
+        fetchStatus.textContent = "That's taking too long — paste your link below instead.";
+        return;
+      }
+
+      var trimmed = (text || '').trim();
+
+      if (!trimmed) {
+        linkInput.value = '';
+        showLinkFallback();
+        fetchStatus.textContent = 'Clipboard is empty — paste your link below.';
+        return;
+      }
+
+      if (!LINK_PATTERN.test(trimmed)) {
+        linkInput.value = trimmed;
+        showLinkFallback();
+        fetchStatus.textContent = "That doesn't look like a link — check it below.";
+        return;
+      }
+
+      linkInput.value = trimmed;
+      triggerFetch(trimmed).then(function (status) {
+        if (status === 'error') {
+          showLinkFallback();
+        }
+      });
+    }, function () {
+      restoreClipboardBtn();
+      showLinkFallback();
+      fetchStatus.textContent = "Couldn't read the clipboard — paste your link below instead.";
+    });
+  });
+
   // ---------- Form submit (add or save edit) ----------
   form.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -169,6 +400,8 @@
     var name = nameInput.value.trim();
     var price = parseFloat(priceInput.value);
     var currency = currencySelect.value;
+    var shippingFeeRaw = shippingInput.value.trim();
+    var shippingFee = shippingFeeRaw === '' ? 0 : parseFloat(shippingFeeRaw);
     var unitLabel = unitInput.value.trim();
     var promoType = promoSelect.value;
     var referenceLink = linkInput.value.trim();
@@ -181,6 +414,10 @@
 
     if (isNaN(price) || price < 0) {
       return; // required attrs handle most of this, this is just a guard
+    }
+
+    if (shippingFeeRaw !== '' && (isNaN(shippingFee) || shippingFee < 0)) {
+      return; // blank means 0 and is fine; a present-but-invalid value blocks submit
     }
 
     var promo = { type: promoType };
@@ -205,6 +442,7 @@
         existing.name = name;
         existing.price = price;
         existing.currency = currency;
+        existing.shippingFee = shippingFee;
         existing.unitLabel = unitLabel;
         existing.promo = promo;
         existing.referenceLink = referenceLink;
@@ -216,6 +454,7 @@
         name: name,
         price: price,
         currency: currency,
+        shippingFee: shippingFee,
         unitLabel: unitLabel,
         promo: promo,
         referenceLink: referenceLink
@@ -315,6 +554,13 @@
     originalLine.textContent = item.price.toFixed(2) + ' ' + item.currency +
       (item.unitLabel ? ' · ' + item.unitLabel : '');
     priceBox.appendChild(originalLine);
+
+    if (item.shippingFee > 0) {
+      var shippingLine = document.createElement('p');
+      shippingLine.className = 'item-shipping';
+      shippingLine.textContent = '+ ' + item.shippingFee.toFixed(2) + ' ' + item.currency + ' shipping';
+      priceBox.appendChild(shippingLine);
+    }
 
     var effLine = document.createElement('p');
     effLine.className = 'effective-line';

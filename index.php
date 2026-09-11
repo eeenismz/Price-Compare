@@ -24,6 +24,21 @@
       <div class="form-panel-body">
         <form id="item-form" novalidate>
 
+          <p class="form-hint">Copy a Shopee or Lazada product link, then tap below to auto-fill the fields &mdash; or enter the details manually.</p>
+
+          <button type="button" id="fetch-clipboard-btn" class="btn-secondary">Fetch from clipboard</button>
+          <p class="helper-text" id="fetch-status" aria-live="polite"></p>
+
+          <div id="link-fallback" hidden>
+            <div class="field">
+              <label for="item-link">Reference link <span class="optional">(optional)</span></label>
+              <input type="text" id="item-link" name="item-link" placeholder="Paste Shopee/Lazada link (optional)">
+              <button type="button" id="fetch-details-btn" class="btn-secondary">Fetch details</button>
+            </div>
+          </div>
+
+          <div class="form-divider"><span>or enter manually</span></div>
+
           <div class="field">
             <label for="item-name">Product name</label>
             <input type="text" id="item-name" name="item-name" required>
@@ -47,6 +62,11 @@
                 <option value="IDR">IDR</option>
               </select>
             </div>
+          </div>
+
+          <div class="field">
+            <label for="item-shipping">Shipping fee <span class="optional">(optional)</span></label>
+            <input type="number" id="item-shipping" name="item-shipping" inputmode="decimal" step="0.01" min="0">
           </div>
 
           <div class="field">
@@ -81,11 +101,6 @@
           <div class="field promo-extra" id="second-fixed-field" hidden>
             <label for="second-fixed-y">Second item&rsquo;s price (Y)</label>
             <input type="number" id="second-fixed-y" name="second-fixed-y" inputmode="decimal" min="0" step="0.01">
-          </div>
-
-          <div class="field">
-            <label for="item-link">Reference link <span class="optional">(optional)</span></label>
-            <input type="text" id="item-link" name="item-link" placeholder="Paste Shopee/Lazada link (optional)">
           </div>
 
           <div class="field-actions">

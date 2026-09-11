@@ -126,6 +126,32 @@ summary:focus-visible {
   padding: 0 16px 16px;
 }
 
+/* ---------- Form intro / divider ---------- */
+.form-hint {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+.form-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 14px;
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.form-divider::before,
+.form-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
 /* ---------- Form fields ---------- */
 .field {
   margin-bottom: 14px;
@@ -206,6 +232,29 @@ summary:focus-visible {
 
 .btn-primary:hover {
   opacity: 0.92;
+}
+
+.btn-secondary {
+  margin-top: 8px;
+  padding: 8px 14px;
+  min-height: 40px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .btn-cancel {
@@ -342,6 +391,16 @@ summary:focus-visible {
   word-break: break-word;
 }
 
+.item-shipping {
+  font-family: var(--font-mono);
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  margin-bottom: 4px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
 .effective-line {
   white-space: nowrap;
 }
@@ -423,6 +482,11 @@ summary:focus-visible {
   }
 
   .item-card.flash {
+    animation: flash-bg 0.9s ease-out;
+  }
+
+  .field input.flash,
+  .field select.flash {
     animation: flash-bg 0.9s ease-out;
   }
 
