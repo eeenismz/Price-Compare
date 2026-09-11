@@ -6,14 +6,31 @@
 <title>Price Compare</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
 <header class="site-header">
-  <h1>Price Compare</h1>
+  <div class="site-header-top">
+    <h1>Price Compare</h1>
+    <div class="currency-control">
+      <span class="currency-control-label">Comparing in</span>
+      <span class="currency-select-wrap">
+        <select id="app-currency" aria-label="Currency to compare items in">
+          <option value="THB">THB</option>
+          <option value="MYR">MYR</option>
+          <option value="SGD">SGD</option>
+          <option value="USD">USD</option>
+          <option value="PHP">PHP</option>
+          <option value="VND">VND</option>
+          <option value="IDR">IDR</option>
+        </select>
+      </span>
+    </div>
+  </div>
   <p class="tagline">Add items manually and find the best deal &mdash; this session only.</p>
+  <div class="barcode-rule" aria-hidden="true"></div>
 </header>
 
 <div class="layout">
@@ -24,44 +41,16 @@
       <div class="form-panel-body">
         <form id="item-form" novalidate>
 
-          <p class="form-hint">Copy a Shopee or Lazada product link, then tap below to auto-fill the fields &mdash; or enter the details manually.</p>
-
-          <button type="button" id="fetch-clipboard-btn" class="btn-secondary">Fetch from clipboard</button>
-          <p class="helper-text" id="fetch-status" aria-live="polite"></p>
-
-          <div id="link-fallback" hidden>
-            <div class="field">
-              <label for="item-link">Reference link <span class="optional">(optional)</span></label>
-              <input type="text" id="item-link" name="item-link" placeholder="Paste Shopee/Lazada link (optional)">
-              <button type="button" id="fetch-details-btn" class="btn-secondary">Fetch details</button>
-            </div>
-          </div>
-
-          <div class="form-divider"><span>or enter manually</span></div>
-
           <div class="field">
             <label for="item-name">Product name</label>
             <input type="text" id="item-name" name="item-name" required>
             <p class="field-error" id="name-error" hidden>Please enter a product name</p>
           </div>
 
-          <div class="field-row">
-            <div class="field field-price">
-              <label for="item-price">Price</label>
-              <input type="number" id="item-price" name="item-price" inputmode="decimal" step="0.01" min="0" required>
-            </div>
-            <div class="field field-currency">
-              <label for="item-currency">Currency</label>
-              <select id="item-currency" name="item-currency">
-                <option value="THB">THB</option>
-                <option value="MYR">MYR</option>
-                <option value="SGD">SGD</option>
-                <option value="USD">USD</option>
-                <option value="PHP">PHP</option>
-                <option value="VND">VND</option>
-                <option value="IDR">IDR</option>
-              </select>
-            </div>
+          <div class="field">
+            <label for="item-price">Price</label>
+            <input type="number" id="item-price" name="item-price" inputmode="decimal" step="0.01" min="0" required>
+            <p class="helper-text">The price as listed for one purchase &mdash; not your total spend. If it's a deal like &ldquo;buy 1 get 1 free&rdquo; or a bundle, pick it in Promotion below and this works out the real cost per unit for you.</p>
           </div>
 
           <div class="field">
@@ -114,9 +103,11 @@
   </section>
 
   <section class="results-column" id="results-column">
-    <div id="mismatch-banner" class="mismatch-banner" hidden></div>
     <div id="empty-state" class="empty-state" hidden>
       <p>No items yet &mdash; add your first product above to start comparing.</p>
+    </div>
+    <div class="results-toolbar" id="results-toolbar" hidden>
+      <button type="button" id="clear-all-btn" class="btn-secondary btn-clear-all">Clear all</button>
     </div>
     <div id="results-groups"></div>
   </section>

@@ -47,9 +47,52 @@ link, layered on top of the working manual-entry MVP — never a blocker to manu
 - Live-tested in browser (not just linted): clipboard timeout/fallback, the
   paste+fetch fallback path against the real backend, and the shipping-fee math/display
 
+### Phase 3 — Dark redesign + single-currency simplification (requested mid-build)
+- Product-designer produced a design plan + standalone preview (scanner/price-tag
+  terminal concept, dark palette, Big Shoulders/IBM Plex Sans/IBM Plex Mono) — reviewed
+  and confirmed before any production files were touched
+- Removed per-item currency entirely: one global "Comparing in [THB ▾]" setting in
+  the header instead, session-only in memory; comparison view is now a single flat
+  sorted list (no currency grouping, no mismatch banner)
+- Currency-mismatch handling on fetched items: still auto-fills name/price (never
+  blocks), but flags a mismatch in the fetch-status message and tags the added item
+  with a small persistent inline note (e.g. "Priced in MYR when added")
+- Ported the full dark visual system into production (index.php/css/style.css):
+  die-cut price-tag "Best Value" badge, bracketed mono promo chips, barcode-strip and
+  tear-line dividers, scan-red/tag-gold accents, colored focus glows instead of grey
+  shadows
+- Live-tested in browser: card rendering, Best Value/shipping math, the header
+  currency switcher re-rendering without reinterpreting existing items
+- Fixed a real bug found post-redesign: `.toast` and `.field-row` both set an explicit
+  `display`, which silently overrode the browser's default `[hidden]` behavior —
+  the Undo toast never actually hid, and the bundle-promo fields showed regardless of
+  promotion selected. Fixed with one defensive `[hidden] { display: none !important; }`
+  rule rather than patching each element
+- Fixed a real bug found via live user testing: the domain allowlist had a
+  non-existent `shope.ee` instead of Shopee's actual native share-link domain
+  `shp.ee` (e.g. `th.shp.ee`), so real Shopee shortlinks were wrongly rejected as
+  "unsupported domain" instead of correctly short-circuiting with the expected
+  "Shopee pages can't be read automatically" message
+
+### Phase 3.5 — Post-redesign fixes and small UX requests
+- Confirmed no regression: re-tested the exact Shopee link the user hit issues with
+  directly against the endpoint and live in browser — correctly returns the expected
+  "blocked" response with currency set from the domain; the earlier report was the
+  Shopee-is-unfetchable behavior working as designed, not a new bug
+- Live-verified Lazada auto-fetch still works end-to-end with a real product link
+  pulled fresh from Lazada TH's sitemap (name + price filled in correctly)
+- Product name now pre-fills with the last-added name on the next "Add Item" (instead
+  of staying blank) — comparing multiple offers of the same product no longer means
+  retyping the name each time; still fully editable for a different product
+- Added a "Clear all" button (results toolbar, only shown when items exist) using the
+  same non-blocking 5-second undo-toast pattern as single-item remove, per this
+  project's established no-confirm-dialogs decision (see memory.md)
+- Live-tested in browser: name pre-fill across two sequential adds, Clear all removing
+  everything, and Undo restoring the full list
+
 ## In Progress
 
 ## Pending
 
-Nothing currently pending — Phase 1 and Phase 2 (plus the mid-build UX additions) are
-both complete and verified.
+Nothing currently pending — Phase 1, Phase 2, Phase 3, and Phase 3.5 are all complete
+and verified.

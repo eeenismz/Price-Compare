@@ -1,22 +1,31 @@
 /* ---------- Design tokens ---------- */
 :root {
-  --paper: #F3F4F1;
-  --surface: #FFFFFF;
-  --ink: #14171A;
-  --ink-muted: #6B7178;
-  --line: #DCDFDA;
-  --accent: #3D4CFF;
-  --tag-gold: #FFC229;
-  --info-bg: #E9EAF6;
-  --info-text: #33366B;
+  --void: #0B0D0C;          /* page background — an unlit device screen, not neutral grey-black */
+  --panel: #161A18;         /* card / panel surface, one step up from void */
+  --panel-raised: #1D2220;  /* inputs, buttons, toast — one step up from panel */
+  --text: #ECE7DA;          /* primary text — warm bone-white */
+  --text-dim: #868C82;      /* secondary text / labels */
+  --scan-red: #FF4438;      /* accent 1 — capture/action states: fetch, focus, live state */
+  --tag-gold: #D9A441;      /* accent 2 — reward/confirm states: best value, primary Add Item */
 
-  --font-heading: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif;
-  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  --line: rgba(236, 231, 218, 0.09);
+  --scan-red-dim: rgba(255, 68, 56, 0.14);
+  --tag-gold-dim: rgba(217, 164, 65, 0.12);
+
+  --font-display: 'Big Shoulders', 'Arial Narrow', sans-serif; /* condensed — structural labels/headings */
+  --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; /* all prices/currency/numeric readouts */
 }
 
 /* ---------- Reset / base ---------- */
 * { box-sizing: border-box; }
+
+/* Author rules below set `display` on several of these same selectors
+   (.toast, .field-row, …) for their visible state; without this, that
+   authored `display` wins over the browser's default `[hidden]{display:none}`
+   regardless of the `hidden` attribute, since author-origin rules beat
+   user-agent-origin rules at equal specificity. */
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
@@ -25,53 +34,126 @@ html, body {
 }
 
 body {
-  background: var(--paper);
-  color: var(--ink);
+  background:
+    radial-gradient(ellipse 900px 500px at 15% -8%, var(--scan-red-dim), transparent 60%),
+    radial-gradient(ellipse 900px 500px at 88% 108%, var(--tag-gold-dim), transparent 60%),
+    var(--void);
+  color: var(--text);
   font-family: var(--font-body);
   line-height: 1.5;
+  min-height: 100vh;
 }
 
 h1, h2, h3 {
-  font-family: var(--font-heading);
+  font-family: var(--font-display);
   margin: 0;
 }
 
 p { margin: 0; }
 
-a { color: var(--accent); }
+a { color: var(--tag-gold); }
 
-/* Visible focus ring on every interactive element */
+/* Visible, colored focus ring on every interactive element — no grey default outline */
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 summary:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--scan-red);
   outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--scan-red-dim);
+  border-radius: 2px;
 }
 
 /* ---------- Header ---------- */
 .site-header {
-  padding: 20px 16px 8px;
   max-width: 1100px;
   margin: 0 auto;
+  padding: 28px 16px 0;
+}
+
+.site-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .site-header h1 {
-  font-size: 1.5rem;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(1.7rem, 5vw, 2.1rem);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
 }
 
 .site-header .tagline {
-  color: var(--ink-muted);
-  font-size: 0.9rem;
-  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: 0.92rem;
+  margin-top: 6px;
+  max-width: 46ch;
+}
+
+/* Decorative "barcode" rule — replaces a plain hairline under the header */
+.barcode-rule {
+  height: 8px;
+  margin: 18px 0 0;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--line) 0 2px,
+    transparent 2px 5px,
+    var(--line) 5px 7px,
+    transparent 7px 10px,
+    var(--line) 10px 11px,
+    transparent 11px 16px
+  );
+  opacity: 0.7;
+}
+
+/* ---------- App-wide currency control ---------- */
+.currency-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.currency-control-label {
+  color: var(--text-dim);
+}
+
+.currency-select-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+
+.currency-select-wrap::before,
+.currency-select-wrap::after {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.currency-select-wrap::before { content: '['; }
+.currency-select-wrap::after { content: ']'; }
+
+#app-currency {
+  background: none;
+  border: none;
+  color: var(--tag-gold);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 2px 0;
+  cursor: pointer;
 }
 
 /* ---------- Layout ---------- */
 .layout {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 8px 16px 32px;
+  padding: 20px 16px 48px;
   display: grid;
   grid-template-columns: 1fr;
   gap: 20px;
@@ -97,18 +179,37 @@ summary:focus-visible {
 
 /* ---------- Form panel (details/summary) ---------- */
 #item-form-details {
-  background: var(--surface);
+  background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 3px;
 }
 
 #item-form-details > summary {
   cursor: pointer;
-  padding: 16px;
-  font-family: var(--font-heading);
+  list-style: none;
+  padding: 14px 16px;
+  font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  background: var(--panel-raised);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
+
+#item-form-details > summary::-webkit-details-marker { display: none; }
+
+#item-form-details > summary::after {
+  content: '—';
+  color: var(--scan-red);
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+#item-form-details[open] > summary::after { content: '+'; }
 
 @media (min-width: 768px) {
   /* Desktop: form panel is always visible, not a togglable disclosure */
@@ -117,39 +218,25 @@ summary:focus-visible {
     cursor: default;
   }
 
+  #item-form-details > summary::after {
+    display: none;
+  }
+
   #item-form-details .form-panel-body {
     display: block !important;
   }
 }
 
 .form-panel-body {
-  padding: 0 16px 16px;
+  padding: 16px;
 }
 
-/* ---------- Form intro / divider ---------- */
-.form-hint {
-  color: var(--ink-muted);
-  font-size: 0.85rem;
-  margin-bottom: 12px;
-}
-
-.form-divider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 4px 0 14px;
-  color: var(--ink-muted);
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.form-divider::before,
-.form-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--line);
+.helper-text {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  min-height: 1em;
 }
 
 /* ---------- Form fields ---------- */
@@ -162,10 +249,11 @@ summary:focus-visible {
   font-size: 0.85rem;
   font-weight: 500;
   margin-bottom: 6px;
+  color: var(--text);
 }
 
 .optional {
-  color: var(--ink-muted);
+  color: var(--text-dim);
   font-weight: 400;
 }
 
@@ -175,10 +263,19 @@ summary:focus-visible {
   padding: 10px 12px;
   font-family: var(--font-body);
   font-size: 1rem;
-  color: var(--ink);
-  background: var(--surface);
+  color: var(--text);
+  background: var(--panel-raised);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 2px;
+}
+
+.field input::placeholder {
+  color: var(--text-dim);
+}
+
+.field input[type="number"] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .field-row {
@@ -192,21 +289,12 @@ summary:focus-visible {
   min-width: 0;
 }
 
-.field-price { flex: 3; }
-.field-currency { flex: 2; }
-
 .promo-extra .field { flex: 1; }
-
-.helper-text {
-  margin-top: 6px;
-  font-size: 0.8rem;
-  color: var(--ink-muted);
-}
 
 .field-error {
   margin-top: 6px;
   font-size: 0.8rem;
-  color: var(--ink-muted);
+  color: var(--scan-red);
 }
 
 .field-actions {
@@ -216,40 +304,56 @@ summary:focus-visible {
   margin-top: 4px;
 }
 
+/* Confirm / register action: filled tag-gold */
 .btn-primary {
   width: 100%;
   padding: 12px 16px;
-  min-height: 44px;
-  background: var(--accent);
-  color: #FFFFFF;
+  min-height: 46px;
+  background: var(--tag-gold);
+  color: var(--void);
   border: none;
-  border-radius: 6px;
-  font-family: var(--font-heading);
+  border-radius: 2px;
+  font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
-.btn-primary:hover {
-  opacity: 0.92;
-}
+.btn-primary:hover { background: #e6b25a; }
 
 .btn-secondary {
   margin-top: 8px;
   padding: 8px 14px;
   min-height: 40px;
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--panel-raised);
+  color: var(--text);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 2px;
   font-family: var(--font-body);
   font-weight: 500;
   font-size: 0.85rem;
   cursor: pointer;
 }
 
-.btn-secondary:hover {
-  border-color: var(--accent);
+.btn-secondary:hover { border-color: var(--text-dim); }
+
+/* ---------- Results toolbar (Clear all) ---------- */
+.results-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.btn-clear-all {
+  margin-top: 0;
+  color: var(--text-dim);
+}
+
+.btn-clear-all:hover {
+  border-color: var(--scan-red);
+  color: var(--scan-red);
 }
 
 .btn-secondary:disabled {
@@ -260,7 +364,7 @@ summary:focus-visible {
 .btn-cancel {
   background: none;
   border: none;
-  color: var(--accent);
+  color: var(--text-dim);
   font-family: var(--font-body);
   font-size: 0.9rem;
   text-decoration: underline;
@@ -269,45 +373,15 @@ summary:focus-visible {
   padding: 0;
 }
 
-/* ---------- Currency mismatch banner ---------- */
-.mismatch-banner {
-  background: var(--info-bg);
-  color: var(--info-text);
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  margin-bottom: 16px;
-}
-
 /* ---------- Empty state ---------- */
 .empty-state {
-  color: var(--ink-muted);
+  color: var(--text-dim);
   padding: 32px 16px;
   text-align: center;
   font-size: 0.95rem;
 }
 
-/* ---------- Currency groups ---------- */
-.currency-group {
-  margin-bottom: 24px;
-}
-
-.currency-group-title {
-  font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-  margin-bottom: 10px;
-}
-
-.single-item-note {
-  color: var(--ink-muted);
-  font-size: 0.85rem;
-  font-style: italic;
-  margin-bottom: 10px;
-}
-
+/* ---------- Results list ---------- */
 .item-list {
   list-style: none;
   margin: 0;
@@ -320,29 +394,44 @@ summary:focus-visible {
 /* ---------- Item card ---------- */
 .item-card {
   position: relative;
-  background: var(--surface);
+  background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 3px;
   padding: 14px 16px;
 }
 
 .item-card.best-value {
-  border-left: 3px solid var(--tag-gold);
-  background: rgba(255, 194, 41, 0.08);
+  border-color: rgba(217, 164, 65, 0.5);
+  background: linear-gradient(180deg, var(--tag-gold-dim), transparent 40%), var(--panel);
 }
 
+/* Signature element: a physical price-tag shape, not a pill badge */
 .badge-best {
-  display: inline-block;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
   background: var(--tag-gold);
-  color: var(--ink);
-  font-family: var(--font-heading);
+  color: var(--void);
+  font-family: var(--font-display);
   font-weight: 700;
-  font-size: 0.72rem;
-  letter-spacing: 0.03em;
+  font-size: 0.8rem;
+  letter-spacing: 0.01em;
   text-transform: uppercase;
-  padding: 3px 10px;
-  border-radius: 999px;
-  margin-bottom: 8px;
+  padding: 4px 14px 4px 20px;
+  margin-bottom: 10px;
+  clip-path: polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 50%);
+}
+
+.badge-best::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--void);
 }
 
 .item-card-main {
@@ -350,53 +439,47 @@ summary:focus-visible {
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .item-card-info {
   flex: 1;
-  min-width: 0;
+  min-width: 160px;
 }
 
 .item-name {
-  font-size: 1.02rem;
+  font-size: 1rem;
+  font-weight: 600;
   margin-bottom: 4px;
   word-break: break-word;
+  color: var(--text);
 }
 
+/* Promo chip — bracketed system-readout tag, not a pill */
 .promo-chip {
-  display: inline-block;
-  background: var(--paper);
-  color: var(--ink-muted);
-  font-size: 0.72rem;
-  padding: 2px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  margin-bottom: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-dim);
 }
+
+.promo-chip::before { content: '['; }
+.promo-chip::after { content: ']'; }
 
 .item-card-price {
   flex-shrink: 1;
   min-width: 0;
-  max-width: 55%;
+  max-width: 100%;
   text-align: right;
+  margin-left: auto;
 }
 
-.item-original {
-  font-family: var(--font-mono);
-  color: var(--ink-muted);
-  font-size: 0.78rem;
-  margin-bottom: 4px;
-  white-space: normal;
-  overflow-wrap: break-word;
-  word-break: break-word;
-}
-
+.item-original,
 .item-shipping {
   font-family: var(--font-mono);
-  color: var(--ink-muted);
-  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  font-size: 0.78rem;
   margin-bottom: 4px;
-  white-space: normal;
   overflow-wrap: break-word;
   word-break: break-word;
 }
@@ -407,23 +490,19 @@ summary:focus-visible {
 
 .effective-price {
   font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: 1.4rem;
-  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: clamp(1.15rem, 5vw, 1.55rem);
+  color: var(--text);
 }
 
-.effective-currency {
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--ink-muted);
-  margin-left: 4px;
-}
+.best-value .effective-price { color: var(--tag-gold); }
 
 .item-card-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .btn-edit,
@@ -431,19 +510,18 @@ summary:focus-visible {
   min-height: 44px;
   min-width: 44px;
   padding: 8px 14px;
-  border-radius: 6px;
+  border-radius: 2px;
   border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--panel-raised);
+  color: var(--text);
   font-family: var(--font-body);
   font-size: 0.85rem;
   cursor: pointer;
 }
 
-.btn-edit:hover,
-.btn-remove:hover {
-  border-color: var(--accent);
-}
+.btn-edit:hover { border-color: var(--text-dim); }
+.btn-remove { color: #ff8078; }
+.btn-remove:hover { border-color: var(--scan-red); }
 
 /* ---------- Toast ---------- */
 .toast {
@@ -451,15 +529,17 @@ summary:focus-visible {
   left: 50%;
   bottom: 20px;
   transform: translateX(-50%);
-  background: var(--ink);
-  color: var(--paper);
-  padding: 12px 16px;
-  border-radius: 8px;
+  background: var(--panel-raised);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--scan-red);
+  padding: 12px 18px;
+  border-radius: 2px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   font-size: 0.9rem;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 28px rgba(255, 68, 56, 0.14);
   z-index: 1000;
   max-width: calc(100vw - 32px);
 }
@@ -468,16 +548,20 @@ summary:focus-visible {
   background: none;
   border: none;
   color: var(--tag-gold);
+  font-family: var(--font-mono);
   font-weight: 600;
   cursor: pointer;
   min-height: 44px;
   padding: 0 4px;
 }
 
+.toast-undo::before { content: '[ '; }
+.toast-undo::after { content: ' ]'; }
+
 /* ---------- Motion (guarded behind reduced-motion preference) ---------- */
 @media (prefers-reduced-motion: no-preference) {
   @keyframes flash-bg {
-    from { background: rgba(61, 76, 255, 0.18); }
+    from { background: rgba(217, 164, 65, 0.22); }
     to { background: transparent; }
   }
 
@@ -498,4 +582,10 @@ summary:focus-visible {
   .toast.show {
     animation: toast-in 0.25s ease-out;
   }
+}
+
+/* ---------- Narrow-width tuning ---------- */
+@media (max-width: 420px) {
+  .item-card-price { text-align: right; }
+  .btn-primary { font-size: 0.95rem; }
 }

@@ -49,32 +49,25 @@
   // ---------- State ----------
   var items = [];              // in-memory list of all items for this session
   var editingId = null;        // id of item currently being edited, or null when adding
-  var lastCurrency = 'THB';    // remembers the last currency picked, for the next add
+  var lastProductName = '';    // remembers the last-added product name, for the next add
+  var appCurrency = 'THB';     // the single app-wide currency everything is compared in, this session only
   var lastChangedId = null;    // id of the item to flash after the next render
   var removedUndoTimeout = null;
-  var currencyTouched = false; // true once the user manually changes the currency select
-  var activeFetchController = null; // AbortController for any in-flight "Fetch details" request
 
   // ---------- DOM refs ----------
   var form = document.getElementById('item-form');
   var formDetails = document.getElementById('item-form-details');
   var formSummary = document.getElementById('item-form-summary');
 
+  var appCurrencySelect = document.getElementById('app-currency');
+
   var nameInput = document.getElementById('item-name');
   var nameError = document.getElementById('name-error');
   var priceInput = document.getElementById('item-price');
-  var currencySelect = document.getElementById('item-currency');
   var shippingInput = document.getElementById('item-shipping');
   var unitInput = document.getElementById('item-unit');
   var promoSelect = document.getElementById('item-promo');
   var promoHelper = document.getElementById('promo-helper');
-  var linkInput = document.getElementById('item-link');
-  var fetchBtn = document.getElementById('fetch-details-btn');
-  var fetchStatus = document.getElementById('fetch-status');
-  var fetchBtnDefaultLabel = fetchBtn.textContent;
-  var fetchClipboardBtn = document.getElementById('fetch-clipboard-btn');
-  var fetchClipboardBtnDefaultLabel = fetchClipboardBtn.textContent;
-  var linkFallback = document.getElementById('link-fallback');
 
   var fixedBundleFields = document.getElementById('fixed-bundle-fields');
   var bundleNInput = document.getElementById('bundle-n');
@@ -86,8 +79,9 @@
   var submitBtn = document.getElementById('submit-btn');
   var cancelBtn = document.getElementById('cancel-edit-btn');
 
-  var mismatchBanner = document.getElementById('mismatch-banner');
   var emptyState = document.getElementById('empty-state');
+  var resultsToolbar = document.getElementById('results-toolbar');
+  var clearAllBtn = document.getElementById('clear-all-btn');
   var resultsGroups = document.getElementById('results-groups');
 
   var toastEl = document.getElementById('toast');
@@ -124,35 +118,23 @@
 
   promoSelect.addEventListener('change', updatePromoUI);
 
-  // Track manual currency changes so a later "Fetch details" result never
-  // overwrites a currency the user picked themselves.
-  currencySelect.addEventListener('change', function () {
-    currencyTouched = true;
+  // ---------- App-wide currency control ----------
+  appCurrencySelect.addEventListener('change', function () {
+    appCurrency = appCurrencySelect.value;
+    renderResults(); // existing items aren't retroactively reinterpreted, just re-sorted/re-rendered
   });
 
   // ---------- Form reset / edit mode ----------
   function resetForm() {
     editingId = null;
     form.reset();
-    currencySelect.value = lastCurrency; // keep the last-used currency instead of the HTML default
+    nameInput.value = lastProductName; // pre-fill with the last name — comparing offers of the same product shouldn't mean retyping it each time
     promoSelect.value = 'none';
     updatePromoUI();
     submitBtn.textContent = 'Add Item';
     cancelBtn.hidden = true;
     formSummary.textContent = 'Add Item';
     nameError.hidden = true;
-
-    if (activeFetchController) {
-      activeFetchController.abort();
-      activeFetchController = null;
-    }
-    fetchStatus.textContent = '';
-    fetchBtn.disabled = false;
-    fetchBtn.textContent = fetchBtnDefaultLabel;
-    fetchClipboardBtn.disabled = false;
-    fetchClipboardBtn.textContent = fetchClipboardBtnDefaultLabel;
-    linkFallback.hidden = true;
-    currencyTouched = false;
   }
 
   // Clear the "enter a product name" message as soon as the user types a valid name.
@@ -169,7 +151,6 @@
     editingId = id;
     nameInput.value = item.name;
     priceInput.value = item.price;
-    currencySelect.value = item.currency;
     shippingInput.value = item.shippingFee || '';
     unitInput.value = item.unitLabel || '';
     promoSelect.value = item.promo.type;
@@ -180,11 +161,6 @@
       bundleXInput.value = item.promo.x;
     } else if (item.promo.type === 'secondFixed') {
       secondFixedYInput.value = item.promo.y;
-    }
-
-    linkInput.value = item.referenceLink || '';
-    if (item.referenceLink) {
-      showLinkFallback();
     }
 
     submitBtn.textContent = 'Save changes';
@@ -202,209 +178,16 @@
     }
   });
 
-  // ---------- Fetch details (auto-fill from Shopee/Lazada link) ----------
-  // Purely additive: never blocks or disables manual entry/submission.
-  var LINK_PATTERN = /^https?:\/\/.+/i;
-
-  function currencyOptionExists(value) {
-    if (!value) return false;
-    var options = currencySelect.options;
-    for (var i = 0; i < options.length; i++) {
-      if (options[i].value === value) return true;
-    }
-    return false;
-  }
-
-  function fetchStatusMessage(data) {
-    if (data.status === 'ok') {
-      return 'Filled in the name and price from Lazada — please double-check.';
-    }
-    if (data.status === 'partial') {
-      if (data.name && (data.price === null || data.price === undefined)) {
-        return 'Got the product name, but not the price — please enter the price.';
-      }
-      if ((data.price !== null && data.price !== undefined) && !data.name) {
-        return 'Got the price, but not the name — please enter the name.';
-      }
-    }
-    if (data.status === 'error') {
-      if (data.reason === 'blocked' && data.source === 'shopee') {
-        return data.currency ?
-          'Shopee pages can’t be read automatically. Currency set to ' + data.currency + ' — please enter the name and price.' :
-          'Shopee pages can’t be read automatically. Please enter the name and price.';
-      }
-      if (data.reason === 'blocked' && data.source === 'lazada') {
-        return 'Lazada blocked the request. Please enter the details manually.';
-      }
-      if (data.reason === 'not_found') {
-        return "That product page isn't available any more.";
-      }
-      if (data.reason === 'timeout') {
-        return 'That took too long. Please enter the details manually.';
-      }
-      if (data.reason === 'unsupported_domain') {
-        return 'Only Shopee and Lazada links can be fetched. The link is still saved.';
-      }
-      if (data.reason === 'invalid_url') {
-        return "That doesn't look like a link.";
-      }
-    }
-    return "Couldn't read that page. Please enter the details manually.";
-  }
-
-  function flashEl(el) {
-    el.classList.add('flash');
-    setTimeout(function () { el.classList.remove('flash'); }, 900);
-  }
-
-  function applyFetchResult(data) {
-    if (data.name && !nameInput.value.trim()) {
-      nameInput.value = data.name;
-      flashEl(nameInput);
-    }
-    if (data.price !== null && data.price !== undefined && !priceInput.value.trim()) {
-      priceInput.value = data.price;
-      flashEl(priceInput);
-    }
-    if (data.currency && !currencyTouched && currencyOptionExists(data.currency)) {
-      currencySelect.value = data.currency;
-    }
-
-    fetchStatus.textContent = fetchStatusMessage(data);
-  }
-
-  function showLinkFallback() {
-    linkFallback.hidden = false;
-  }
-
-  // Runs the actual "look up this link" request. Shared by the fallback
-  // "Fetch details" button and the "Fetch from clipboard" button. Returns the
-  // fetch promise chain, resolving with the final status ('ok'/'partial'/'error')
-  // once settled, so callers can decide whether to reveal the fallback UI.
-  function triggerFetch(link) {
-    if (activeFetchController) {
-      activeFetchController.abort();
-    }
-    var controller = new AbortController();
-    activeFetchController = controller;
-
-    fetchBtn.disabled = true;
-    fetchBtn.textContent = 'Fetching…';
-    fetchStatus.textContent = 'Checking the link…';
-
-    var timeoutId = setTimeout(function () { controller.abort(); }, 15000);
-
-    return fetch('api/fetch-product.php?url=' + encodeURIComponent(link), { signal: controller.signal })
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        if (activeFetchController !== controller) return null;
-        applyFetchResult(data);
-        return data.status;
-      })
-      .catch(function () {
-        if (activeFetchController !== controller) return null;
-        var data = { status: 'error', reason: 'timeout', name: null, price: null, currency: null, source: null };
-        applyFetchResult(data);
-        return data.status;
-      })
-      .then(function (status) {
-        clearTimeout(timeoutId);
-        if (activeFetchController === controller) {
-          activeFetchController = null;
-        }
-        fetchBtn.disabled = false;
-        fetchBtn.textContent = fetchBtnDefaultLabel;
-        return status;
-      });
-  }
-
-  fetchBtn.addEventListener('click', function () {
-    var link = linkInput.value.trim();
-    if (!link || !LINK_PATTERN.test(link)) {
-      fetchStatus.textContent = "That doesn't look like a link.";
-      return;
-    }
-
-    triggerFetch(link);
-  });
-
-  // ---------- Fetch from clipboard (primary entry point) ----------
-  function restoreClipboardBtn() {
-    fetchClipboardBtn.disabled = false;
-    fetchClipboardBtn.textContent = fetchClipboardBtnDefaultLabel;
-  }
-
-  fetchClipboardBtn.addEventListener('click', function () {
-    if (!navigator.clipboard || typeof navigator.clipboard.readText !== 'function') {
-      showLinkFallback();
-      fetchStatus.textContent = "Clipboard access isn't available in this browser — paste your link below instead.";
-      return;
-    }
-
-    fetchClipboardBtn.disabled = true;
-    fetchClipboardBtn.textContent = 'Reading clipboard…';
-
-    // The permission prompt (or the read itself) can hang indefinitely in some
-    // browsers, so race it against a timeout rather than risk getting stuck on
-    // "Reading clipboard…" forever.
-    var clipboardTimedOut = false;
-    var clipboardTimeout = new Promise(function (resolve) {
-      setTimeout(function () {
-        clipboardTimedOut = true;
-        resolve('');
-      }, 5000);
-    });
-
-    Promise.race([navigator.clipboard.readText(), clipboardTimeout]).then(function (text) {
-      restoreClipboardBtn();
-
-      if (clipboardTimedOut) {
-        showLinkFallback();
-        fetchStatus.textContent = "That's taking too long — paste your link below instead.";
-        return;
-      }
-
-      var trimmed = (text || '').trim();
-
-      if (!trimmed) {
-        linkInput.value = '';
-        showLinkFallback();
-        fetchStatus.textContent = 'Clipboard is empty — paste your link below.';
-        return;
-      }
-
-      if (!LINK_PATTERN.test(trimmed)) {
-        linkInput.value = trimmed;
-        showLinkFallback();
-        fetchStatus.textContent = "That doesn't look like a link — check it below.";
-        return;
-      }
-
-      linkInput.value = trimmed;
-      triggerFetch(trimmed).then(function (status) {
-        if (status === 'error') {
-          showLinkFallback();
-        }
-      });
-    }, function () {
-      restoreClipboardBtn();
-      showLinkFallback();
-      fetchStatus.textContent = "Couldn't read the clipboard — paste your link below instead.";
-    });
-  });
-
   // ---------- Form submit (add or save edit) ----------
   form.addEventListener('submit', function (e) {
     e.preventDefault();
 
     var name = nameInput.value.trim();
     var price = parseFloat(priceInput.value);
-    var currency = currencySelect.value;
     var shippingFeeRaw = shippingInput.value.trim();
     var shippingFee = shippingFeeRaw === '' ? 0 : parseFloat(shippingFeeRaw);
     var unitLabel = unitInput.value.trim();
     var promoType = promoSelect.value;
-    var referenceLink = linkInput.value.trim();
 
     if (!name) {
       nameError.hidden = false;
@@ -420,6 +203,8 @@
       return; // blank means 0 and is fine; a present-but-invalid value blocks submit
     }
 
+    lastProductName = name; // remember for the next add
+
     var promo = { type: promoType };
 
     if (promoType === 'fixedBundle') {
@@ -434,18 +219,14 @@
       promo.y = y;
     }
 
-    lastCurrency = currency; // remember for the next add
-
     if (editingId) {
       var existing = items.filter(function (i) { return i.id === editingId; })[0];
       if (existing) {
         existing.name = name;
         existing.price = price;
-        existing.currency = currency;
         existing.shippingFee = shippingFee;
         existing.unitLabel = unitLabel;
         existing.promo = promo;
-        existing.referenceLink = referenceLink;
         lastChangedId = existing.id;
       }
     } else {
@@ -453,11 +234,9 @@
         id: makeId(),
         name: name,
         price: price,
-        currency: currency,
         shippingFee: shippingFee,
         unitLabel: unitLabel,
-        promo: promo,
-        referenceLink: referenceLink
+        promo: promo
       };
       items.push(newItem);
       lastChangedId = newItem.id;
@@ -512,6 +291,35 @@
     showUndoToast(removed, index);
   }
 
+  function showBulkUndoToast(removedItems) {
+    clearTimeout(removedUndoTimeout);
+    var count = removedItems.length;
+    toastMessage.textContent = 'Cleared ' + count + (count === 1 ? ' item.' : ' items.');
+    toastEl.hidden = false;
+    toastEl.classList.add('show');
+
+    toastUndoBtn.onclick = function () {
+      clearTimeout(removedUndoTimeout);
+      items = removedItems; // restore the whole list as it was
+      hideToast();
+      renderResults();
+    };
+
+    removedUndoTimeout = setTimeout(hideToast, 5000);
+  }
+
+  clearAllBtn.addEventListener('click', function () {
+    if (items.length === 0) return;
+
+    var removedItems = items;
+    items = [];
+    lastProductName = ''; // don't carry the old name into a fully-cleared list
+    resetForm(); // always return to a blank form, not just when mid-edit
+
+    renderResults();
+    showBulkUndoToast(removedItems);
+  });
+
   // ---------- Rendering ----------
   function buildItemCard(item, effective, isBest) {
     var li = document.createElement('li');
@@ -551,14 +359,14 @@
 
     var originalLine = document.createElement('p');
     originalLine.className = 'item-original';
-    originalLine.textContent = item.price.toFixed(2) + ' ' + item.currency +
+    originalLine.textContent = item.price.toFixed(2) +
       (item.unitLabel ? ' · ' + item.unitLabel : '');
     priceBox.appendChild(originalLine);
 
     if (item.shippingFee > 0) {
       var shippingLine = document.createElement('p');
       shippingLine.className = 'item-shipping';
-      shippingLine.textContent = '+ ' + item.shippingFee.toFixed(2) + ' ' + item.currency + ' shipping';
+      shippingLine.textContent = '+ ' + item.shippingFee.toFixed(2) + ' shipping';
       priceBox.appendChild(shippingLine);
     }
 
@@ -569,11 +377,6 @@
     effPriceSpan.className = 'effective-price';
     effPriceSpan.textContent = effective.toFixed(2);
     effLine.appendChild(effPriceSpan);
-
-    var effCurrencySpan = document.createElement('span');
-    effCurrencySpan.className = 'effective-currency';
-    effCurrencySpan.textContent = item.currency;
-    effLine.appendChild(effCurrencySpan);
 
     priceBox.appendChild(effLine);
     main.appendChild(priceBox);
@@ -607,65 +410,35 @@
 
     if (items.length === 0) {
       emptyState.hidden = false;
-      mismatchBanner.hidden = true;
+      resultsToolbar.hidden = true;
       return;
     }
     emptyState.hidden = true;
+    resultsToolbar.hidden = false;
 
-    // Group items by currency, computing effective price once per item.
-    var groups = {};
-    items.forEach(function (item) {
-      var eff = computeEffectivePrice(item);
-      if (!groups[item.currency]) groups[item.currency] = [];
-      groups[item.currency].push({ item: item, eff: eff });
+    // Single flat list, cheapest effective price first. Existing items are
+    // never retroactively reinterpreted when appCurrency changes — only the
+    // sort order and the "Best Value" pick are re-evaluated on re-render.
+    var entries = items.map(function (item) {
+      return { item: item, eff: computeEffectivePrice(item) };
     });
 
-    var currencyKeys = Object.keys(groups).sort();
+    entries.sort(function (a, b) { return a.eff - b.eff; });
 
-    if (currencyKeys.length > 1) {
-      mismatchBanner.hidden = false;
-      mismatchBanner.textContent = 'Showing ' + currencyKeys.length +
-        " currency groups. Prices aren't converted — only compare items within the same currency.";
-    } else {
-      mismatchBanner.hidden = true;
-    }
+    var minEff = entries.reduce(function (min, e) {
+      return e.eff < min ? e.eff : min;
+    }, entries[0].eff);
 
-    currencyKeys.forEach(function (currency) {
-      var groupItems = groups[currency].slice().sort(function (a, b) {
-        return a.eff - b.eff;
-      });
+    var list = document.createElement('ul');
+    list.className = 'item-list';
 
-      var minEff = groupItems.reduce(function (min, g) {
-        return g.eff < min ? g.eff : min;
-      }, groupItems[0].eff);
-
-      var groupEl = document.createElement('div');
-      groupEl.className = 'currency-group';
-
-      var title = document.createElement('h2');
-      title.className = 'currency-group-title';
-      title.textContent = currency;
-      groupEl.appendChild(title);
-
-      if (groupItems.length === 1) {
-        var note = document.createElement('p');
-        note.className = 'single-item-note';
-        note.textContent = 'Only item in ' + currency + ' — add another to compare.';
-        groupEl.appendChild(note);
-      }
-
-      var list = document.createElement('ul');
-      list.className = 'item-list';
-
-      groupItems.forEach(function (entry) {
-        // Small epsilon tolerance so floating-point rounding doesn't break ties.
-        var isBest = groupItems.length > 1 && Math.abs(entry.eff - minEff) < 0.005;
-        list.appendChild(buildItemCard(entry.item, entry.eff, isBest));
-      });
-
-      groupEl.appendChild(list);
-      resultsGroups.appendChild(groupEl);
+    entries.forEach(function (entry) {
+      // Small epsilon tolerance so floating-point rounding doesn't break ties.
+      var isBest = entries.length > 1 && Math.abs(entry.eff - minEff) < 0.005;
+      list.appendChild(buildItemCard(entry.item, entry.eff, isBest));
     });
+
+    resultsGroups.appendChild(list);
 
     // Flash the row that was just added/edited/restored, as a visible confirmation.
     if (lastChangedId) {
@@ -692,7 +465,7 @@
   });
 
   // ---------- Init ----------
-  currencySelect.value = lastCurrency;
+  appCurrencySelect.value = appCurrency;
   updatePromoUI();
   renderResults();
 })();

@@ -1,18 +1,26 @@
 # price-compare
 
 A browser-based tool for comparing product prices — physical items or e-commerce
-products — factoring in common promotion types (BOGO, bundle deals, etc.) to find
-the actual cheapest option per unit.
+products — factoring in common promotion types (BOGO, bundle deals, etc.) and
+shipping fees, to find the actual cheapest option per unit.
 
 ## What it does
 
-- Add items manually: name, price, currency, and an optional unit label (e.g. "per bottle").
-- Optionally paste a Shopee/Lazada link for your own reference (stored as plain
-  text only — no auto-fetching yet, see Roadmap).
-- Pick an optional promotion for each item: Buy 1 Get 1 Free, 2nd item 50% off,
-  Buy 3 Pay for 2, a fixed bundle price, or a fixed price for the 2nd item.
-- Items are grouped by currency (no conversion between currencies) and sorted
-  cheapest-effective-price-first, with the best deal in each group highlighted.
+- Add items manually: name, price, an optional shipping fee, and an optional
+  unit label (e.g. "per bottle").
+- Price is the listed price for one purchase, not your total spend — pick a
+  promotion (Buy 1 Get 1 Free, 2nd item 50% off, Buy 3 Pay for 2, a fixed bundle
+  price, or a fixed price for the 2nd item) and the app works out the real cost
+  per unit for you.
+- Everything is compared in a single currency, set once via "Comparing in" in
+  the header (THB/MYR/SGD/USD/PHP/VND/IDR) — no conversion, so make sure
+  whatever you're comparing is actually priced in the same currency.
+- Items show as one flat list, sorted cheapest-effective-price-first, with the
+  best deal highlighted.
+- The product name field remembers what you last typed, so comparing several
+  offers of the same product doesn't mean retyping the name each time.
+- "Clear all" removes every item at once; removing a single item works the
+  same way — both give you a 5-second undo instead of a confirmation dialog.
 - Everything lives in memory for the current page load only — nothing is saved
   between visits.
 
@@ -36,8 +44,3 @@ Requires a local PHP server (built and tested against MAMP's PHP 8.2).
   included in `dist/`
 - `todo.md` — task tracker (current phase, roadmap)
 - `memory.md` — project decisions/gotchas log
-
-## Roadmap
-
-Phase 2 (not yet built): auto-fetching product name/price/currency from a pasted
-Shopee/Lazada link. See `todo.md` for the full backlog.
