@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Regression test — mobile overflow with long unit label</title>
+<style>
+  body { font-family: sans-serif; padding: 16px; }
+  #frame-wrap { width: 375px; border: 2px dashed #999; }
+  iframe { width: 375px; height: 900px; border: 0; display: block; }
+  #result { margin-top: 16px; padding: 12px; font-weight: bold; }
+  .pass { background: #d7f5d7; color: #14611c; }
+  .fail { background: #f7d7d7; color: #7a1414; }
+  code { background: #eee; padding: 2px 4px; }
+</style>
+</head>
+<body>
+
+<h1>Regression test: mobile overflow (375px) with a long unit label</h1>
+<p>
+  Bug found during QA (2026-09-11): a long "Quantity / unit label" value makes the
+  item card wider than the 375px viewport. <code>.item-original</code> uses
+  <code>white-space: nowrap</code> and its parent <code>.item-card-price</code> uses
+  <code>flex-shrink: 0</code>, so the price/unit line is never allowed to wrap or
+  shrink — it pushes the card (and the Edit/Remove buttons) off-screen instead of
+  wrapping. <code>overflow-x: hidden</code> on <code>html, body</code> only hides the
+  resulting scrollbar; it does not stop the content from being clipped and
+  unreadable.
+</p>
+<p>
+  Open this file through the same web server as the app (e.g.
+  <code>http://localhost/workplaces/price-compare/tests/mobile-overflow-test.html</code>)
+  so the iframe below can load <code>../index.php</code> same-origin.
+</p>
+
+<div id="frame-wrap">
+  <iframe id="app-frame" src="../index.php"></iframe>
+</div>
+
+<div id="result">Running...</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var frame = document.getElementById('app-frame');
+  var resultEl = document.getElementById('result');
+
+  function report(pass, message) {
+    resultEl.textContent = (pass ? 'PASS — ' : 'FAIL — ') + message;
+    resultEl.className = pass ? 'pass' : 'fail';
+  }
+
+  frame.addEventListener('load', function () {
+    var doc = frame.contentDocument;
+    var win = frame.contentWindow;
+
+    function set(id, value) {
+      var el = doc.getElementById(id);
+      el.value = value;
+      el.dispatchEvent(new win.Event('input', { bubbles: true }));
+    }
+
+    // A realistic-but-longish unit label a real user might type
+    // (matches the placeholder's style: "per bottle, per 100g").
+    set('item-name', 'Cooking Oil');
+    set('item-price', '199.00');
+    set('item-unit', 'per case of 24 large bottles (economy pack)');
+    doc.getElementById('item-form').dispatchEvent(
+      new win.Event('submit', { bubbles: true, cancelable: true })
+    );
+
+    // Give layout a tick to settle.
+    setTimeout(function () {
+      var bodyScrollWidth = doc.body.scrollWidth;
+      var viewportWidth = win.innerWidth;
+      var overflowPx = bodyScrollWidth - viewportWidth;
+
+      var pass = overflowPx <= 0;
+      report(
+        pass,
+        'viewport=' + viewportWidth + 'px, content scrollWidth=' + bodyScrollWidth +
+        'px (overflow=' + overflowPx + 'px). Expected content to fit within the viewport ' +
+        'with a long unit label.'
+      );
+    }, 50);
+  });
+})();
+</script>
+
+</body>
+</html>
