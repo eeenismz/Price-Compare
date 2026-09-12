@@ -113,9 +113,25 @@ link, layered on top of the working manual-entry MVP — never a blocker to manu
   (79 for 2 vs. 129 for 3), confirmed 39.50 now correctly wins Best Value; also
   confirmed Quantity visibly disables/greys out when a promotion is selected
 
+### Phase 3.8 — Tooltip helper text + promo chip detail (requested from user testing)
+- Converted the long Price and Quantity helper paragraphs (which were pushing the
+  form out of shape) into a small "i" info button next to each label; click to
+  toggle a tooltip bubble, click elsewhere or Escape to close, only one open at a
+  time. Promotion's helper text stayed as a static one-liner (user's choice — it's
+  short and useful to see live while filling bundle fields)
+- Promo chips on result cards now spell out the actual deal instead of the generic
+  promo name: "[3 for 129.00]" instead of "[Fixed bundle price]", "[2nd item at
+  X.XX]" instead of "[Second item at a fixed price]" (bogo/second50/buy3pay2 chips
+  unchanged — their labels already fully describe the deal, no hidden params)
+- Quantity-based cards (no promotion, Quantity > 1) now get a matching "[Qty N]"
+  chip for the same visual treatment as promo-based cards
+- Live-tested in browser: tooltip toggle/close-on-outside-click behavior, both new
+  chip formats, and re-confirmed the Phase 3.7 39.50-vs-43.00 comparison still
+  computes correctly
+
 ## In Progress
 
 ## Pending
 
-Nothing currently pending — Phase 1, Phase 2, Phase 3, Phase 3.5, Phase 3.6, and
-Phase 3.7 are all complete and verified.
+Nothing currently pending — Phase 1, Phase 2, Phase 3, Phase 3.5, Phase 3.6,
+Phase 3.7, and Phase 3.8 are all complete and verified.

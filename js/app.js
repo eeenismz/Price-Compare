@@ -64,8 +64,11 @@
   var nameInput = document.getElementById('item-name');
   var nameError = document.getElementById('name-error');
   var priceInput = document.getElementById('item-price');
+  var priceInfoBtn = document.getElementById('price-info-btn');
+  var priceTooltip = document.getElementById('price-tooltip');
   var shippingInput = document.getElementById('item-shipping');
   var quantityInput = document.getElementById('item-quantity');
+  var quantityInfoBtn = document.getElementById('quantity-info-btn');
   var quantityHelper = document.getElementById('quantity-helper');
   var unitInput = document.getElementById('item-unit');
   var promoSelect = document.getElementById('item-promo');
@@ -102,6 +105,19 @@
     return window.matchMedia('(max-width: 767px)').matches;
   }
 
+  // Chip text for a promo — spells out the actual deal for types with
+  // parameters (bundle N/X, second-item Y) instead of just naming the promo,
+  // since e.g. "Fixed bundle price" alone doesn't say it's 3-for-129.
+  function getPromoChipText(promo) {
+    if (promo.type === 'fixedBundle') {
+      return promo.n + ' for ' + promo.x.toFixed(2);
+    }
+    if (promo.type === 'secondFixed') {
+      return '2nd item at ' + promo.y.toFixed(2);
+    }
+    return PROMO_TYPES[promo.type].label;
+  }
+
   function computeEffectivePrice(item) {
     var def = PROMO_TYPES[item.promo.type] || PROMO_TYPES.none;
     var base = def.compute(item.price, item.promo);
@@ -127,6 +143,36 @@
   }
 
   promoSelect.addEventListener('change', updatePromoUI);
+
+  // ---------- Info-icon tooltips (tap/click to toggle, one open at a time) ----------
+  var infoTooltips = [
+    { btn: priceInfoBtn, bubble: priceTooltip },
+    { btn: quantityInfoBtn, bubble: quantityHelper }
+  ];
+
+  function closeAllTooltips() {
+    infoTooltips.forEach(function (t) {
+      t.bubble.hidden = true;
+      t.btn.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  infoTooltips.forEach(function (t) {
+    t.btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var wasOpen = !t.bubble.hidden;
+      closeAllTooltips();
+      if (!wasOpen) {
+        t.bubble.hidden = false;
+        t.btn.setAttribute('aria-expanded', 'true');
+      }
+    });
+  });
+
+  document.addEventListener('click', closeAllTooltips);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeAllTooltips();
+  });
 
   // ---------- App-wide currency control ----------
   appCurrencySelect.addEventListener('change', function () {
@@ -360,10 +406,14 @@
     nameEl.textContent = item.name;
     info.appendChild(nameEl);
 
-    if (item.promo.type !== 'none') {
+    var quantity = item.promo.type === 'none' ? (item.promo.quantity || 1) : 1;
+    var chipText = item.promo.type !== 'none' ? getPromoChipText(item.promo) :
+      (quantity > 1 ? 'Qty ' + quantity : null);
+
+    if (chipText) {
       var chip = document.createElement('span');
       chip.className = 'promo-chip';
-      chip.textContent = PROMO_TYPES[item.promo.type].label;
+      chip.textContent = chipText;
       info.appendChild(document.createElement('br'));
       info.appendChild(chip);
     }
@@ -372,8 +422,6 @@
 
     var priceBox = document.createElement('div');
     priceBox.className = 'item-card-price';
-
-    var quantity = item.promo.type === 'none' ? (item.promo.quantity || 1) : 1;
 
     var originalLine = document.createElement('p');
     originalLine.className = 'item-original';

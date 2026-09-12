@@ -51,9 +51,11 @@
           </div>
 
           <div class="field">
-            <label for="item-price">Price</label>
+            <label for="item-price">Price
+              <button type="button" class="info-btn" id="price-info-btn" aria-expanded="false" aria-label="What is Price?">i</button>
+            </label>
             <input type="number" id="item-price" name="item-price" inputmode="decimal" step="0.01" min="0" required>
-            <p class="helper-text">The price as listed for one purchase &mdash; not your total spend. If it's a deal like &ldquo;buy 1 get 1 free&rdquo; or a bundle, pick it in Promotion below and this works out the real cost per unit for you.</p>
+            <p class="tooltip-bubble" id="price-tooltip" role="tooltip" hidden>The price as listed for one purchase &mdash; not your total spend. If it's a deal like &ldquo;buy 1 get 1 free&rdquo; or a bundle, pick it in Promotion below and this works out the real cost per unit for you.</p>
           </div>
 
           <div class="field">
@@ -63,9 +65,11 @@
 
           <div class="field-row">
             <div class="field">
-              <label for="item-quantity">Quantity</label>
+              <label for="item-quantity">Quantity
+                <button type="button" class="info-btn" id="quantity-info-btn" aria-expanded="false" aria-label="What is Quantity?">i</button>
+              </label>
               <input type="number" id="item-quantity" name="item-quantity" inputmode="numeric" min="1" step="1" value="1">
-              <p class="helper-text" id="quantity-helper"></p>
+              <p class="tooltip-bubble" id="quantity-helper" role="tooltip" hidden></p>
             </div>
             <div class="field">
               <label for="item-unit">Unit label <span class="optional">(optional)</span></label>

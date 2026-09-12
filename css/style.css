@@ -239,6 +239,43 @@ summary:focus-visible {
   min-height: 1em;
 }
 
+.info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-style: italic;
+  line-height: 1;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--text-dim);
+  border-radius: 50%;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.info-btn:hover,
+.info-btn[aria-expanded="true"] {
+  color: var(--void);
+  background: var(--text-dim);
+}
+
+.tooltip-bubble {
+  margin-top: 8px;
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+
 /* ---------- Form fields ---------- */
 .field {
   margin-bottom: 14px;
