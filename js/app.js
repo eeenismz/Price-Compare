@@ -11,8 +11,8 @@
     none: {
       label: 'No promotion',
       helper: '',
-      compute: function (price) { return price; },
-      units: function (promo) { return 1; }
+      compute: function (price, promo) { return price / (promo.quantity || 1); },
+      units: function (promo) { return promo.quantity || 1; }
     },
     bogo: {
       label: 'Buy 1 Get 1 Free',
@@ -65,6 +65,8 @@
   var nameError = document.getElementById('name-error');
   var priceInput = document.getElementById('item-price');
   var shippingInput = document.getElementById('item-shipping');
+  var quantityInput = document.getElementById('item-quantity');
+  var quantityHelper = document.getElementById('quantity-helper');
   var unitInput = document.getElementById('item-unit');
   var promoSelect = document.getElementById('item-promo');
   var promoHelper = document.getElementById('promo-helper');
@@ -114,6 +116,14 @@
     fixedBundleFields.hidden = type !== 'fixedBundle';
     secondFixedField.hidden = type !== 'secondFixed';
     promoHelper.textContent = (PROMO_TYPES[type] || PROMO_TYPES.none).helper;
+
+    // Quantity only drives the math when there's no promotion — a promotion
+    // already defines its own unit count (BOGO = 2, fixed bundle N, etc.),
+    // so disable Quantity then to avoid double-counting.
+    quantityInput.disabled = type !== 'none';
+    quantityHelper.textContent = type === 'none' ?
+      'How many units your Price above pays for — e.g. if you paid 79 for 2 cups, enter 2 here and the app works out 39.50 each. Leave at 1 if Price is already for a single unit.' :
+      'Ignored while a promotion is selected — the promotion above determines the unit count.';
   }
 
   promoSelect.addEventListener('change', updatePromoUI);
@@ -129,6 +139,7 @@
     editingId = null;
     form.reset();
     nameInput.value = lastProductName; // pre-fill with the last name — comparing offers of the same product shouldn't mean retyping it each time
+    quantityInput.value = '1';
     promoSelect.value = 'none';
     updatePromoUI();
     submitBtn.textContent = 'Add Item';
@@ -152,6 +163,7 @@
     nameInput.value = item.name;
     priceInput.value = item.price;
     shippingInput.value = item.shippingFee || '';
+    quantityInput.value = item.promo.type === 'none' ? (item.promo.quantity || 1) : 1;
     unitInput.value = item.unitLabel || '';
     promoSelect.value = item.promo.type;
     updatePromoUI();
@@ -186,6 +198,8 @@
     var price = parseFloat(priceInput.value);
     var shippingFeeRaw = shippingInput.value.trim();
     var shippingFee = shippingFeeRaw === '' ? 0 : parseFloat(shippingFeeRaw);
+    var quantity = parseInt(quantityInput.value, 10);
+    if (!quantity || quantity < 1) quantity = 1;
     var unitLabel = unitInput.value.trim();
     var promoType = promoSelect.value;
 
@@ -207,7 +221,9 @@
 
     var promo = { type: promoType };
 
-    if (promoType === 'fixedBundle') {
+    if (promoType === 'none') {
+      promo.quantity = quantity;
+    } else if (promoType === 'fixedBundle') {
       var n = parseInt(bundleNInput.value, 10);
       var x = parseFloat(bundleXInput.value);
       if (!n || n < 1 || isNaN(x) || x < 0) return;
@@ -357,9 +373,12 @@
     var priceBox = document.createElement('div');
     priceBox.className = 'item-card-price';
 
+    var quantity = item.promo.type === 'none' ? (item.promo.quantity || 1) : 1;
+
     var originalLine = document.createElement('p');
     originalLine.className = 'item-original';
     originalLine.textContent = item.price.toFixed(2) +
+      (quantity > 1 ? ' for ' + quantity : '') +
       (item.unitLabel ? ' · ' + item.unitLabel : '');
     priceBox.appendChild(originalLine);
 

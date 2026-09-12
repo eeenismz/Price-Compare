@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Price Compare</title>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -58,9 +61,16 @@
             <input type="number" id="item-shipping" name="item-shipping" inputmode="decimal" step="0.01" min="0">
           </div>
 
-          <div class="field">
-            <label for="item-unit">Quantity / unit label <span class="optional">(optional)</span></label>
-            <input type="text" id="item-unit" name="item-unit" placeholder="e.g. per bottle, per 100g">
+          <div class="field-row">
+            <div class="field">
+              <label for="item-quantity">Quantity</label>
+              <input type="number" id="item-quantity" name="item-quantity" inputmode="numeric" min="1" step="1" value="1">
+              <p class="helper-text" id="quantity-helper"></p>
+            </div>
+            <div class="field">
+              <label for="item-unit">Unit label <span class="optional">(optional)</span></label>
+              <input type="text" id="item-unit" name="item-unit" placeholder="e.g. per bottle, per 100g">
+            </div>
           </div>
 
           <div class="field">

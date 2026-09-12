@@ -90,9 +90,32 @@ link, layered on top of the working manual-entry MVP — never a blocker to manu
 - Live-tested in browser: name pre-fill across two sequential adds, Clear all removing
   everything, and Undo restoring the full list
 
+### Phase 3.6 — Favicon
+- Generated favicon-32x32.png, favicon-16x16.png, and a properly-sized 180x180
+  apple-touch-icon.png from the user-supplied source image (sips, no new deps)
+- Added the corresponding `<link>` tags to index.php's `<head>`
+- Synced dist/ with the updated index.php and all three favicon files
+
+### Phase 3.7 — Real quantity math (bug found via user testing)
+- User caught the app recommending a worse deal (43.00/pack bundle) over a better
+  one (79 for 2 cups = 39.50/cup) because the old "Quantity / unit label" field was
+  purely a cosmetic text suffix — typing "2" there never divided the price
+- Split it into two fields: a real numeric Quantity (defaults to 1, divides Price
+  when Promotion = "No promotion") and a separate cosmetic Unit label; Quantity
+  auto-disables when any Promotion is selected, since the promotion already defines
+  its own unit count (avoids double-counting)
+- Fixed a bug caught during live testing: `units()` was updated to read the new
+  quantity but `compute()` (the function that actually produces the effective
+  price) wasn't, so the price silently never got divided until traced in-browser
+- Card display now reads "79.00 for 2" instead of "79.00 · 2" so the quantity's
+  effect on price is visible, not just a trailing label
+- Live-tested in browser: reproduced the user's exact noodles example end-to-end
+  (79 for 2 vs. 129 for 3), confirmed 39.50 now correctly wins Best Value; also
+  confirmed Quantity visibly disables/greys out when a promotion is selected
+
 ## In Progress
 
 ## Pending
 
-Nothing currently pending — Phase 1, Phase 2, Phase 3, and Phase 3.5 are all complete
-and verified.
+Nothing currently pending — Phase 1, Phase 2, Phase 3, Phase 3.5, Phase 3.6, and
+Phase 3.7 are all complete and verified.
