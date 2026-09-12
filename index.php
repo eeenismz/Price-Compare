@@ -58,11 +58,6 @@
             <p class="tooltip-bubble" id="price-tooltip" role="tooltip" hidden>The price as listed for one purchase &mdash; not your total spend. If it's a deal like &ldquo;buy 1 get 1 free&rdquo; or a bundle, pick it in Promotion below and this works out the real cost per unit for you.</p>
           </div>
 
-          <div class="field">
-            <label for="item-shipping">Shipping fee <span class="optional">(optional)</span></label>
-            <input type="number" id="item-shipping" name="item-shipping" inputmode="decimal" step="0.01" min="0">
-          </div>
-
           <div class="field-row">
             <div class="field">
               <label for="item-quantity">Quantity
@@ -104,6 +99,11 @@
           <div class="field promo-extra" id="second-fixed-field" hidden>
             <label for="second-fixed-y">Second item&rsquo;s price (Y)</label>
             <input type="number" id="second-fixed-y" name="second-fixed-y" inputmode="decimal" min="0" step="0.01">
+          </div>
+
+          <div class="field">
+            <label for="item-shipping">Shipping fee <span class="optional">(optional)</span></label>
+            <input type="number" id="item-shipping" name="item-shipping" inputmode="decimal" step="0.01" min="0">
           </div>
 
           <div class="field-actions">

@@ -129,9 +129,19 @@ link, layered on top of the working manual-entry MVP — never a blocker to manu
   chip formats, and re-confirmed the Phase 3.7 39.50-vs-43.00 comparison still
   computes correctly
 
+### Phase 3.9 — Shipping fee field reorder (requested mid-build)
+- Moved the "Shipping fee" field in index.php from directly under Price to
+  directly under the Promotion fields (after any promo-specific conditional
+  fields, before the Add Item button) — markup-order-only change, no JS/CSS
+  logic touched
+- Synced dist/index.php
+- Live-tested in browser: field order with no promotion selected, and with
+  "Fixed bundle price" selected (shipping correctly appears after the bundle
+  N/X fields, not sandwiched between Promotion and its conditional fields)
+
 ## In Progress
 
 ## Pending
 
 Nothing currently pending — Phase 1, Phase 2, Phase 3, Phase 3.5, Phase 3.6,
-Phase 3.7, and Phase 3.8 are all complete and verified.
+Phase 3.7, Phase 3.8, and Phase 3.9 are all complete and verified.
