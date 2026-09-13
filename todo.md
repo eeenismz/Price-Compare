@@ -201,15 +201,16 @@ link, layered on top of the working manual-entry MVP — never a blocker to manu
 
 ## Pending
 
-### Phase 4c — Photo-assisted entry + Azure AI Vision OCR proxy
+### Phase 4c — Photo-assisted entry + Azure AI Vision OCR proxy (parked 2026-09-13)
 Two capture modes (shopping-app screenshot vs in-store photo), a server-side
 PHP proxy to Azure AI Vision's Read API (key never in client JS), client-side
 regex/heuristic extraction (not a second LLM call, to avoid an unnamed second
 paid dependency), and a review-UI that reuses the Phase 4a Add-Item form
-directly rather than a parallel code path. **Blocked on the user setting up an
-actual Azure account/API key** — cannot proceed until that exists. Full design
-notes are in the session that produced this plan (2026-09-13), not yet
-re-summarized here.
+directly rather than a parallel code path. Parked indefinitely at the user's
+call — Phase 4a (unit-price rewrite) and 4b (persistence) covered the pain
+points that mattered most; needs an Azure account/API key to pick back up.
+Full design notes are in the session that produced this plan (2026-09-13),
+not yet re-summarized here.
 
 ## Pending (not yet scheduled — out of scope for this pass per spec)
 - User accounts / login
