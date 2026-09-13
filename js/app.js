@@ -1,48 +1,44 @@
-// Price Compare — Phase 1 MVP
+// Price Compare — Phase 2: Unit-price system
 // Everything lives in memory for the page's lifetime. No database, no localStorage.
 
 (function () {
   'use strict';
 
-  // ---------- Promotion definitions ----------
-  // Each entry knows how to compute the "effective unit price" from the raw
-  // item price plus any extra params (n/x for bundle, y for second-fixed).
+  // ---------- Unit system definitions ----------
+  var UNIT_INFO = {
+    ml:    { family: 'volume', toBase: 1 },
+    l:     { family: 'volume', toBase: 1000 },
+    g:     { family: 'mass',   toBase: 1 },
+    kg:    { family: 'mass',   toBase: 1000 },
+    piece: { family: 'piece',  toBase: 1 },
+    sheet: { family: 'sheet',  toBase: 1 }
+  };
+
+  // Promotion definitions — helper text only, actual compute is in computeItemPrice below
   var PROMO_TYPES = {
     none: {
       label: 'No promotion',
-      helper: '',
-      compute: function (price, promo) { return price / (promo.quantity || 1); },
-      units: function (promo) { return promo.quantity || 1; }
+      helper: ''
     },
     bogo: {
       label: 'Buy 1 Get 1 Free',
-      helper: 'Effective price = price ÷ 2',
-      compute: function (price) { return price / 2; },
-      units: function (promo) { return 2; }
+      helper: 'Effective price = price ÷ 2'
     },
     second50: {
       label: 'Second item 50% off',
-      helper: 'Effective price = price × 0.75',
-      compute: function (price) { return price * 0.75; },
-      units: function (promo) { return 2; }
+      helper: 'Effective price = price × 0.75'
     },
     buy3pay2: {
       label: 'Buy 3 Pay for 2',
-      helper: 'Effective price = price × 2 ÷ 3',
-      compute: function (price) { return (price * 2) / 3; },
-      units: function (promo) { return 3; }
+      helper: 'Effective price = price × 2 ÷ 3'
     },
     fixedBundle: {
       label: 'Fixed bundle price',
-      helper: 'Effective price = total bundle price (X) ÷ number of units (N)',
-      compute: function (price, promo) { return promo.x / promo.n; },
-      units: function (promo) { return promo.n; }
+      helper: 'Effective price = total bundle price (X) ÷ bundle pack count (N)'
     },
     secondFixed: {
       label: 'Second item at a fixed price',
-      helper: 'Effective price = (price + second item price) ÷ 2',
-      compute: function (price, promo) { return (price + promo.y) / 2; },
-      units: function (promo) { return 2; }
+      helper: 'Effective price = (price + second item price) ÷ 2'
     }
   };
 
@@ -67,10 +63,15 @@
   var priceInfoBtn = document.getElementById('price-info-btn');
   var priceTooltip = document.getElementById('price-tooltip');
   var shippingInput = document.getElementById('item-shipping');
-  var quantityInput = document.getElementById('item-quantity');
-  var quantityInfoBtn = document.getElementById('quantity-info-btn');
-  var quantityHelper = document.getElementById('quantity-helper');
-  var unitInput = document.getElementById('item-unit');
+
+  var unitSizeInput = document.getElementById('item-unit-size');
+  var unitSizeInfoBtn = document.getElementById('unit-size-info-btn');
+  var unitSizeTooltip = document.getElementById('unit-size-tooltip');
+  var unitMeasureInput = document.getElementById('item-unit-measure');
+  var packCountInput = document.getElementById('item-pack-count');
+  var packCountInfoBtn = document.getElementById('pack-count-info-btn');
+  var packCountTooltip = document.getElementById('pack-count-tooltip');
+
   var promoSelect = document.getElementById('item-promo');
   var promoHelper = document.getElementById('promo-helper');
 
@@ -105,25 +106,91 @@
     return window.matchMedia('(max-width: 767px)').matches;
   }
 
-  // Chip text for a promo — spells out the actual deal for types with
-  // parameters (bundle N/X, second-item Y) instead of just naming the promo,
-  // since e.g. "Fixed bundle price" alone doesn't say it's 3-for-129.
-  function getPromoChipText(promo) {
-    if (promo.type === 'fixedBundle') {
-      return promo.n + ' for ' + promo.x.toFixed(2);
+  // Compute both total cost and total base units for an item.
+  // Returns { totalCost, totalBaseUnits, family, unitLabel }
+  // unitLabel is the normalized display label ('100ml', '100g', 'piece', 'sheet')
+  function computeItemPrice(item) {
+    var unitInfo = UNIT_INFO[item.unitOfMeasure];
+    var unitSizeBase = item.unitSize * unitInfo.toBase;
+    var family = unitInfo.family;
+
+    var totalCost, totalBaseUnits;
+
+    if (item.promo.type === 'none') {
+      totalCost = item.price;
+      totalBaseUnits = unitSizeBase * item.packCount;
+    } else if (item.promo.type === 'bogo') {
+      totalCost = item.price;
+      totalBaseUnits = unitSizeBase * item.packCount * 2;
+    } else if (item.promo.type === 'second50') {
+      totalCost = item.price * 1.5;
+      totalBaseUnits = unitSizeBase * item.packCount * 2;
+    } else if (item.promo.type === 'buy3pay2') {
+      totalCost = item.price * 2;
+      totalBaseUnits = unitSizeBase * item.packCount * 3;
+    } else if (item.promo.type === 'secondFixed') {
+      totalCost = item.price + item.promo.y;
+      totalBaseUnits = unitSizeBase * item.packCount * 2;
+    } else if (item.promo.type === 'fixedBundle') {
+      totalCost = item.promo.x;
+      totalBaseUnits = unitSizeBase * item.promo.n;
     }
-    if (promo.type === 'secondFixed') {
-      return '2nd item at ' + promo.y.toFixed(2);
+
+    totalCost += item.shippingFee || 0;
+
+    // Normalize per 100 base units for volume/mass, per 1 for piece/sheet
+    var costPerBaseUnit = totalCost / totalBaseUnits;
+    var pricePerBaseUnit, unitLabel;
+
+    if (family === 'volume' || family === 'mass') {
+      pricePerBaseUnit = costPerBaseUnit * 100;
+      unitLabel = family === 'volume' ? '100ml' : '100g';
+    } else {
+      pricePerBaseUnit = costPerBaseUnit;
+      unitLabel = family === 'piece' ? 'piece' : 'sheet';
     }
-    return PROMO_TYPES[promo.type].label;
+
+    return {
+      totalCost: totalCost,
+      totalBaseUnits: totalBaseUnits,
+      pricePerBaseUnit: pricePerBaseUnit,
+      family: family,
+      unitLabel: unitLabel
+    };
   }
 
-  function computeEffectivePrice(item) {
-    var def = PROMO_TYPES[item.promo.type] || PROMO_TYPES.none;
-    var base = def.compute(item.price, item.promo);
-    var units = def.units(item.promo);
-    var shipping = item.shippingFee || 0;
-    return base + (shipping / units);
+  // Chip text for a promo — includes resolved price per normalized unit
+  function getPromoChipText(item) {
+    var pricing = computeItemPrice(item);
+    var pricePerUnit = pricing.pricePerBaseUnit.toFixed(2);
+    var label = pricing.unitLabel;
+    var result = '';
+
+    if (item.promo.type === 'fixedBundle') {
+      result = item.promo.n + ' for ' + appCurrency + item.promo.x.toFixed(2);
+    } else if (item.promo.type === 'secondFixed') {
+      result = '2nd item at ' + appCurrency + item.promo.y.toFixed(2);
+    } else if (item.promo.type === 'bogo') {
+      result = 'Buy 1 Get 1 Free';
+    } else if (item.promo.type === 'second50') {
+      result = '2nd item 50% off';
+    } else if (item.promo.type === 'buy3pay2') {
+      result = 'Buy 3, pay for 2';
+    } else {
+      // 'none' with packCount > 1: show Qty chip
+      if (item.packCount > 1) {
+        result = 'Qty ' + item.packCount;
+      } else {
+        return null; // no chip needed
+      }
+      return result;
+    }
+
+    // Append resolved price for promos (not for plain 'none' Qty chip)
+    if (item.promo.type !== 'none') {
+      result += ' → ' + appCurrency + pricePerUnit + '/' + label;
+    }
+    return result;
   }
 
   // ---------- Promo select UI (show/hide extra fields + helper text) ----------
@@ -133,13 +200,11 @@
     secondFixedField.hidden = type !== 'secondFixed';
     promoHelper.textContent = (PROMO_TYPES[type] || PROMO_TYPES.none).helper;
 
-    // Quantity only drives the math when there's no promotion — a promotion
-    // already defines its own unit count (BOGO = 2, fixed bundle N, etc.),
-    // so disable Quantity then to avoid double-counting.
-    quantityInput.disabled = type !== 'none';
-    quantityHelper.textContent = type === 'none' ?
-      'How many units your Price above pays for — e.g. if you paid 79 for 2 cups, enter 2 here and the app works out 39.50 each. Leave at 1 if Price is already for a single unit.' :
-      'Ignored while a promotion is selected — the promotion above determines the unit count.';
+    // Disable Pack count only when fixedBundle is selected (its N is independent)
+    packCountInput.disabled = type === 'fixedBundle';
+    if (type === 'fixedBundle') {
+      packCountInput.value = '1'; // force display to 1 when disabled
+    }
   }
 
   promoSelect.addEventListener('change', updatePromoUI);
@@ -147,7 +212,8 @@
   // ---------- Info-icon tooltips (tap/click to toggle, one open at a time) ----------
   var infoTooltips = [
     { btn: priceInfoBtn, bubble: priceTooltip },
-    { btn: quantityInfoBtn, bubble: quantityHelper }
+    { btn: unitSizeInfoBtn, bubble: unitSizeTooltip },
+    { btn: packCountInfoBtn, bubble: packCountTooltip }
   ];
 
   function closeAllTooltips() {
@@ -185,7 +251,9 @@
     editingId = null;
     form.reset();
     nameInput.value = lastProductName; // pre-fill with the last name — comparing offers of the same product shouldn't mean retyping it each time
-    quantityInput.value = '1';
+    unitSizeInput.value = '';
+    unitMeasureInput.value = 'piece';
+    packCountInput.value = '1';
     promoSelect.value = 'none';
     updatePromoUI();
     submitBtn.textContent = 'Add Item';
@@ -208,9 +276,10 @@
     editingId = id;
     nameInput.value = item.name;
     priceInput.value = item.price;
+    unitSizeInput.value = item.unitSize;
+    unitMeasureInput.value = item.unitOfMeasure;
+    packCountInput.value = item.packCount;
     shippingInput.value = item.shippingFee || '';
-    quantityInput.value = item.promo.type === 'none' ? (item.promo.quantity || 1) : 1;
-    unitInput.value = item.unitLabel || '';
     promoSelect.value = item.promo.type;
     updatePromoUI();
 
@@ -242,11 +311,11 @@
 
     var name = nameInput.value.trim();
     var price = parseFloat(priceInput.value);
+    var unitSize = parseFloat(unitSizeInput.value);
+    var unitOfMeasure = unitMeasureInput.value;
+    var packCount = parseInt(packCountInput.value, 10);
     var shippingFeeRaw = shippingInput.value.trim();
     var shippingFee = shippingFeeRaw === '' ? 0 : parseFloat(shippingFeeRaw);
-    var quantity = parseInt(quantityInput.value, 10);
-    if (!quantity || quantity < 1) quantity = 1;
-    var unitLabel = unitInput.value.trim();
     var promoType = promoSelect.value;
 
     if (!name) {
@@ -259,6 +328,14 @@
       return; // required attrs handle most of this, this is just a guard
     }
 
+    if (isNaN(unitSize) || unitSize <= 0) {
+      return; // Unit size must be positive
+    }
+
+    if (!packCount || packCount < 1) {
+      packCount = 1;
+    }
+
     if (shippingFeeRaw !== '' && (isNaN(shippingFee) || shippingFee < 0)) {
       return; // blank means 0 and is fine; a present-but-invalid value blocks submit
     }
@@ -267,9 +344,7 @@
 
     var promo = { type: promoType };
 
-    if (promoType === 'none') {
-      promo.quantity = quantity;
-    } else if (promoType === 'fixedBundle') {
+    if (promoType === 'fixedBundle') {
       var n = parseInt(bundleNInput.value, 10);
       var x = parseFloat(bundleXInput.value);
       if (!n || n < 1 || isNaN(x) || x < 0) return;
@@ -286,8 +361,10 @@
       if (existing) {
         existing.name = name;
         existing.price = price;
+        existing.unitSize = unitSize;
+        existing.unitOfMeasure = unitOfMeasure;
+        existing.packCount = packCount;
         existing.shippingFee = shippingFee;
-        existing.unitLabel = unitLabel;
         existing.promo = promo;
         lastChangedId = existing.id;
       }
@@ -296,8 +373,10 @@
         id: makeId(),
         name: name,
         price: price,
+        unitSize: unitSize,
+        unitOfMeasure: unitOfMeasure,
+        packCount: packCount,
         shippingFee: shippingFee,
-        unitLabel: unitLabel,
         promo: promo
       };
       items.push(newItem);
@@ -383,7 +462,7 @@
   });
 
   // ---------- Rendering ----------
-  function buildItemCard(item, effective, isBest) {
+  function buildItemCard(item, pricing, isBest) {
     var li = document.createElement('li');
     li.className = 'item-card' + (isBest ? ' best-value' : '');
     li.dataset.id = item.id;
@@ -406,10 +485,7 @@
     nameEl.textContent = item.name;
     info.appendChild(nameEl);
 
-    var quantity = item.promo.type === 'none' ? (item.promo.quantity || 1) : 1;
-    var chipText = item.promo.type !== 'none' ? getPromoChipText(item.promo) :
-      (quantity > 1 ? 'Qty ' + quantity : null);
-
+    var chipText = getPromoChipText(item);
     if (chipText) {
       var chip = document.createElement('span');
       chip.className = 'promo-chip';
@@ -425,9 +501,24 @@
 
     var originalLine = document.createElement('p');
     originalLine.className = 'item-original';
-    originalLine.textContent = item.price.toFixed(2) +
-      (quantity > 1 ? ' for ' + quantity : '') +
-      (item.unitLabel ? ' · ' + item.unitLabel : '');
+
+    // Format: "199.00 for 3 × 850ml" or "199.00 for 850ml" or just "199.00" if packCount is 1
+    var displayText;
+
+    if (item.promo.type === 'fixedBundle') {
+      // Fixed bundle ignores item.price entirely — show the bundle's own total (X)
+      // and pack count (N) instead, since leading with the unused Price field
+      // is exactly the "Price silently means something else" confusion this
+      // rewrite exists to eliminate.
+      displayText = item.promo.x.toFixed(2) + ' for ' + item.promo.n + ' × ' + item.unitSize + item.unitOfMeasure + ' (bundle)';
+    } else if (item.packCount > 1) {
+      displayText = item.price.toFixed(2);
+      displayText += ' for ' + item.packCount + ' × ' + item.unitSize + item.unitOfMeasure;
+    } else {
+      displayText = item.price.toFixed(2) + ' for ' + item.unitSize + item.unitOfMeasure;
+    }
+
+    originalLine.textContent = displayText;
     priceBox.appendChild(originalLine);
 
     if (item.shippingFee > 0) {
@@ -442,8 +533,13 @@
 
     var effPriceSpan = document.createElement('span');
     effPriceSpan.className = 'effective-price';
-    effPriceSpan.textContent = effective.toFixed(2);
+    effPriceSpan.textContent = pricing.pricePerBaseUnit.toFixed(2);
     effLine.appendChild(effPriceSpan);
+
+    var unitLabelSpan = document.createElement('span');
+    unitLabelSpan.className = 'effective-unit';
+    unitLabelSpan.textContent = ' / ' + pricing.unitLabel;
+    effLine.appendChild(unitLabelSpan);
 
     priceBox.appendChild(effLine);
     main.appendChild(priceBox);
@@ -483,29 +579,56 @@
     emptyState.hidden = true;
     resultsToolbar.hidden = false;
 
-    // Single flat list, cheapest effective price first. Existing items are
-    // never retroactively reinterpreted when appCurrency changes — only the
-    // sort order and the "Best Value" pick are re-evaluated on re-render.
-    var entries = items.map(function (item) {
-      return { item: item, eff: computeEffectivePrice(item) };
+    // Group items by family (volume, mass, piece, sheet)
+    var familyGroups = {
+      volume: [],
+      mass: [],
+      piece: [],
+      sheet: []
+    };
+
+    items.forEach(function (item) {
+      var pricing = computeItemPrice(item);
+      familyGroups[pricing.family].push({ item: item, pricing: pricing });
     });
 
-    entries.sort(function (a, b) { return a.eff - b.eff; });
+    var familiesPresent = [];
+    if (familyGroups.volume.length > 0) familiesPresent.push('volume');
+    if (familyGroups.mass.length > 0) familiesPresent.push('mass');
+    if (familyGroups.piece.length > 0) familiesPresent.push('piece');
+    if (familyGroups.sheet.length > 0) familiesPresent.push('sheet');
 
-    var minEff = entries.reduce(function (min, e) {
-      return e.eff < min ? e.eff : min;
-    }, entries[0].eff);
+    // If multiple families present, show a note
+    if (familiesPresent.length > 1) {
+      var note = document.createElement('div');
+      note.className = 'family-note';
+      note.textContent = 'Comparing across incompatible units — grouped separately, no direct Best Value between groups.';
+      resultsGroups.appendChild(note);
+    }
 
-    var list = document.createElement('ul');
-    list.className = 'item-list';
+    // Render each family group
+    familiesPresent.forEach(function (family) {
+      var familyItems = familyGroups[family];
+      if (familyItems.length === 0) return;
 
-    entries.forEach(function (entry) {
-      // Small epsilon tolerance so floating-point rounding doesn't break ties.
-      var isBest = entries.length > 1 && Math.abs(entry.eff - minEff) < 0.005;
-      list.appendChild(buildItemCard(entry.item, entry.eff, isBest));
+      // Sort by price per base unit ascending
+      familyItems.sort(function (a, b) {
+        return a.pricing.pricePerBaseUnit - b.pricing.pricePerBaseUnit;
+      });
+
+      var minPrice = familyItems[0].pricing.pricePerBaseUnit;
+
+      var list = document.createElement('ul');
+      list.className = 'item-list';
+
+      familyItems.forEach(function (entry) {
+        // Mark as Best Value if within epsilon tolerance and there's more than 1 item in the family
+        var isBest = familyItems.length > 1 && Math.abs(entry.pricing.pricePerBaseUnit - minPrice) < 0.005;
+        list.appendChild(buildItemCard(entry.item, entry.pricing, isBest));
+      });
+
+      resultsGroups.appendChild(list);
     });
-
-    resultsGroups.appendChild(list);
 
     // Flash the row that was just added/edited/restored, as a visible confirmation.
     if (lastChangedId) {

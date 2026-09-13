@@ -139,9 +139,64 @@ link, layered on top of the working manual-entry MVP — never a blocker to manu
   "Fixed bundle price" selected (shipping correctly appears after the bundle
   N/X fields, not sandwiched between Promotion and its conditional fields)
 
+### Phase 4a — Unit-price data model rewrite (spec received 2026-09-13)
+- Replaced "Quantity" + free-text "Unit label" with structured Unit size
+  (number) + Unit of measure (dropdown: ml/l/g/kg/piece/sheet) + Pack count
+  (number, default 1) — enables real cross-pack-size comparison (e.g. 850ml×3
+  vs 2200ml×1), which the old free-text field couldn't do
+- "Price" now always means the pre-promotion price for one listing (Pack count
+  units) — clarified in the field's own tooltip, never a total-after-promo or
+  already-divided figure
+- New `pricePerBaseUnit`, normalized per-100ml/100g (volume/mass families) or
+  per-piece/per-sheet, replaces raw effective price for sorting and Best Value
+- Items in incompatible unit families (e.g. ml vs piece) are grouped separately
+  with a warning banner instead of a forced/misleading Best Value
+- Promo chips render as plain language with the resolved price baked in (e.g.
+  "Buy 3, pay for 2 → THB155.33/100ml") instead of the old `[Buy 3 Pay for 2]`
+  debug-style string
+- Pack count disables only for the Fixed bundle promo (its own N/X replace
+  Price and Pack count entirely) — all other promo types (BOGO, 2nd item 50%
+  off, buy3pay2, 2nd item fixed price) keep Pack count enabled and compose
+  with it as an independent multiplier (see memory.md decision)
+- Live-tested in browser: the 850ml×3-vs-2200ml×1 core scenario, ml/l and g/kg
+  conversion, the classic 79-for-2-vs-129-for-3 noodles regression (still
+  correctly picks 39.50 over the bundle's 43.00), BOGO+Pack-count composition
+  (180 for a 6-pack BOGO → 15.00/piece), incompatible-unit warning + per-family
+  grouping, and the info-tooltip toggles (no `[hidden]`/`display` regression)
+- Fixed a real bug found via live testing: the "Unit of measure" `<select>` had
+  no `selected` option, so it silently showed "ml" on first page load despite
+  the JS intending "piece" as the default (see memory.md)
+- Fixed a real bug found via live testing: the results card's "original price"
+  line always showed `item.price` even for Fixed bundle items, where `price`
+  is completely unused by the actual math — misleadingly implying it was the
+  charged price when it wasn't (see memory.md)
+- Updated `tests/mobile-overflow-test.html` (it referenced the now-removed
+  `item-unit` field) to stress-test a long product name + Fixed bundle promo
+  instead of a long free-text unit label — still passes at 375px, 0px overflow
+
 ## In Progress
 
 ## Pending
 
-Nothing currently pending — Phase 1, Phase 2, Phase 3, Phase 3.5, Phase 3.6,
-Phase 3.7, Phase 3.8, and Phase 3.9 are all complete and verified.
+### Phase 4b — Client-side persistence
+Swap the in-memory `items` array for `localStorage`, saving on every mutation
+(including remove — the 5-second Undo toast is a pure in-memory splice-back on
+top, not something storage waits on) and hydrating on load. Also persist the
+app-wide currency setting. Malformed/corrupted storage on load is dropped/
+skipped rather than crashing. No cross-tab live sync (each tab reads storage
+on its own load only) — not in scope.
+
+### Phase 4c — Photo-assisted entry + Azure AI Vision OCR proxy
+Two capture modes (shopping-app screenshot vs in-store photo), a server-side
+PHP proxy to Azure AI Vision's Read API (key never in client JS), client-side
+regex/heuristic extraction (not a second LLM call, to avoid an unnamed second
+paid dependency), and a review-UI that reuses the Phase 4a Add-Item form
+directly rather than a parallel code path. **Blocked on the user setting up an
+actual Azure account/API key** — cannot proceed until that exists. Full design
+notes are in the session that produced this plan (2026-09-13), not yet
+re-summarized here.
+
+## Pending (not yet scheduled — out of scope for this pass per spec)
+- User accounts / login
+- Cross-store price history over time
+- Barcode scanning

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Regression test — mobile overflow with long unit label</title>
+<title>Regression test — mobile overflow with a long product name + bundle promo</title>
 <style>
   body { font-family: sans-serif; padding: 16px; }
   #frame-wrap { width: 375px; border: 2px dashed #999; }
@@ -15,16 +15,16 @@
 </head>
 <body>
 
-<h1>Regression test: mobile overflow (375px) with a long unit label</h1>
+<h1>Regression test: mobile overflow (375px) with a long product name + bundle promo</h1>
 <p>
-  Bug found during QA (2026-09-11): a long "Quantity / unit label" value makes the
-  item card wider than the 375px viewport. <code>.item-original</code> uses
-  <code>white-space: nowrap</code> and its parent <code>.item-card-price</code> uses
-  <code>flex-shrink: 0</code>, so the price/unit line is never allowed to wrap or
-  shrink — it pushes the card (and the Edit/Remove buttons) off-screen instead of
-  wrapping. <code>overflow-x: hidden</code> on <code>html, body</code> only hides the
-  resulting scrollbar; it does not stop the content from being clipped and
-  unreadable.
+  Originally found during QA (2026-09-11) with a long free-text "Unit label" value
+  (since removed — Phase 4a replaced it with a constrained Unit of measure dropdown,
+  so that specific failure mode no longer applies). Updated for the Phase 4a unit-price
+  fields: the longest realistic text now comes from a long product name combined with
+  a Fixed bundle promo chip/original-line (e.g. "6 for &#3647;899.99 &rarr;
+  &#3647;19.11/100ml"). <code>.item-card-price</code> and <code>.item-original</code>
+  were already fixed to wrap/shrink instead of forcing overflow; this test guards
+  against that regressing as new, longer display text is added.
 </p>
 <p>
   Open this file through the same web server as the app (e.g.
@@ -60,11 +60,17 @@
       el.dispatchEvent(new win.Event('input', { bubbles: true }));
     }
 
-    // A realistic-but-longish unit label a real user might type
-    // (matches the placeholder's style: "per bottle, per 100g").
-    set('item-name', 'Cooking Oil');
-    set('item-price', '199.00');
-    set('item-unit', 'per case of 24 large bottles (economy pack)');
+    // A realistically long product name, combined with a Fixed bundle promo —
+    // the promo type with the longest generated chip/original-line text
+    // ("N for X.XX → X.XX/100ml") since Phase 4a.
+    set('item-name', 'Ultra Premium Organic Extra Virgin Cold-Pressed Olive Oil Value Multipack');
+    set('item-price', '1'); // ignored by fixedBundle math, still required
+    set('item-unit-size', '750');
+    set('item-unit-measure', 'ml');
+    doc.getElementById('item-promo').value = 'fixedBundle';
+    doc.getElementById('item-promo').dispatchEvent(new win.Event('change', { bubbles: true }));
+    set('bundle-n', '6');
+    set('bundle-x', '899.99');
     doc.getElementById('item-form').dispatchEvent(
       new win.Event('submit', { bubbles: true, cancelable: true })
     );
@@ -80,7 +86,7 @@
         pass,
         'viewport=' + viewportWidth + 'px, content scrollWidth=' + bodyScrollWidth +
         'px (overflow=' + overflowPx + 'px). Expected content to fit within the viewport ' +
-        'with a long unit label.'
+        'with a long product name and bundle promo text.'
       );
     }, 50);
   });

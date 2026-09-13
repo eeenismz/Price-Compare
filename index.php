@@ -55,21 +55,36 @@
               <button type="button" class="info-btn" id="price-info-btn" aria-expanded="false" aria-label="What is Price?">i</button>
             </label>
             <input type="number" id="item-price" name="item-price" inputmode="decimal" step="0.01" min="0" required>
-            <p class="tooltip-bubble" id="price-tooltip" role="tooltip" hidden>The price as listed for one purchase &mdash; not your total spend. If it's a deal like &ldquo;buy 1 get 1 free&rdquo; or a bundle, pick it in Promotion below and this works out the real cost per unit for you.</p>
+            <p class="tooltip-bubble" id="price-tooltip" role="tooltip" hidden>The pre-promotion price for this one listing. Always the cost for the Pack count units at your chosen Unit size &mdash; never a per-unit price, never post-promotion. If you have a promotion, pick it below and the app will work out the real cost per unit for you.</p>
           </div>
 
           <div class="field-row">
             <div class="field">
-              <label for="item-quantity">Quantity
-                <button type="button" class="info-btn" id="quantity-info-btn" aria-expanded="false" aria-label="What is Quantity?">i</button>
+              <label for="item-unit-size">Unit size
+                <button type="button" class="info-btn" id="unit-size-info-btn" aria-expanded="false" aria-label="What is Unit size?">i</button>
               </label>
-              <input type="number" id="item-quantity" name="item-quantity" inputmode="numeric" min="1" step="1" value="1">
-              <p class="tooltip-bubble" id="quantity-helper" role="tooltip" hidden></p>
+              <input type="number" id="item-unit-size" name="item-unit-size" inputmode="decimal" step="any" min="0" required>
+              <p class="tooltip-bubble" id="unit-size-tooltip" role="tooltip" hidden>The physical size of one unit. For example: 850 (for 850ml), 2.2 (for 2.2kg), or 1 (for 1 piece).</p>
             </div>
             <div class="field">
-              <label for="item-unit">Unit label <span class="optional">(optional)</span></label>
-              <input type="text" id="item-unit" name="item-unit" placeholder="e.g. per bottle, per 100g">
+              <label for="item-unit-measure">Unit of measure</label>
+              <select id="item-unit-measure" name="item-unit-measure" required>
+                <option value="ml">ml</option>
+                <option value="l">l</option>
+                <option value="g">g</option>
+                <option value="kg">kg</option>
+                <option value="piece" selected>piece</option>
+                <option value="sheet">sheet</option>
+              </select>
             </div>
+          </div>
+
+          <div class="field">
+            <label for="item-pack-count">Pack count
+              <button type="button" class="info-btn" id="pack-count-info-btn" aria-expanded="false" aria-label="What is Pack count?">i</button>
+            </label>
+            <input type="number" id="item-pack-count" name="item-pack-count" inputmode="numeric" min="1" step="1" value="1" required>
+            <p class="tooltip-bubble" id="pack-count-tooltip" role="tooltip" hidden>How many unit-size units this one price covers. For example: 3 for three 850ml pouches, or 1 for a single 2200ml bottle.</p>
           </div>
 
           <div class="field">
@@ -87,7 +102,7 @@
 
           <div class="field-row promo-extra" id="fixed-bundle-fields" hidden>
             <div class="field">
-              <label for="bundle-n">Number of units (N)</label>
+              <label for="bundle-n">Bundle pack count (N)</label>
               <input type="number" id="bundle-n" name="bundle-n" inputmode="numeric" min="1" step="1">
             </div>
             <div class="field">
