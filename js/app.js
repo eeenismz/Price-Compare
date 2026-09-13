@@ -1,5 +1,4 @@
-// Price Compare — Phase 2: Unit-price system
-// Everything lives in memory for the page's lifetime. No database, no localStorage.
+// Price Compare — Phase 2: Unit-price system + localStorage persistence
 
 (function () {
   'use strict';
@@ -41,6 +40,86 @@
       helper: 'Effective price = (price + second item price) ÷ 2'
     }
   };
+
+  // ---------- localStorage persistence helpers ----------
+  // Validates a stored item before adding it to the in-memory list.
+  function isValidItem(item) {
+    if (!item || typeof item !== 'object') return false;
+    if (typeof item.id !== 'string' || !item.id) return false;
+    if (typeof item.name !== 'string' || !item.name) return false;
+    if (typeof item.price !== 'number' || isNaN(item.price) || item.price < 0) return false;
+    if (typeof item.unitSize !== 'number' || isNaN(item.unitSize) || item.unitSize <= 0) return false;
+    if (typeof item.unitOfMeasure !== 'string' || !UNIT_INFO[item.unitOfMeasure]) return false;
+    if (typeof item.packCount !== 'number' || !Number.isInteger(item.packCount) || item.packCount < 1) return false;
+
+    // shippingFee is optional but must be valid if present
+    if (item.shippingFee !== undefined && item.shippingFee !== null && (typeof item.shippingFee !== 'number' || isNaN(item.shippingFee) || item.shippingFee < 0)) return false;
+
+    // Check promo object
+    if (!item.promo || typeof item.promo !== 'object') return false;
+    if (typeof item.promo.type !== 'string' || !PROMO_TYPES[item.promo.type]) return false;
+
+    if (item.promo.type === 'fixedBundle') {
+      if (typeof item.promo.n !== 'number' || !Number.isInteger(item.promo.n) || item.promo.n < 1) return false;
+      if (typeof item.promo.x !== 'number' || isNaN(item.promo.x) || item.promo.x < 0) return false;
+    } else if (item.promo.type === 'secondFixed') {
+      if (typeof item.promo.y !== 'number' || isNaN(item.promo.y) || item.promo.y < 0) return false;
+    }
+
+    return true;
+  }
+
+  // Save current state (items + appCurrency) to localStorage.
+  function saveState() {
+    try {
+      var state = {
+        items: items,
+        appCurrency: appCurrency
+      };
+      localStorage.setItem('priceCompareState', JSON.stringify(state));
+    } catch (e) {
+      // localStorage unavailable, full, or access denied; degrade gracefully
+      console.warn('Could not save to localStorage:', e);
+    }
+  }
+
+  // Load state from localStorage. Returns { items, appCurrency } or safe defaults if missing/invalid.
+  function loadState() {
+    try {
+      var stored = localStorage.getItem('priceCompareState');
+      if (!stored) {
+        return { items: [], appCurrency: 'THB' };
+      }
+
+      var state = JSON.parse(stored);
+
+      if (!state || typeof state !== 'object') {
+        return { items: [], appCurrency: 'THB' };
+      }
+
+      // Validate items array, skipping individual invalid items
+      var validItems = [];
+      if (Array.isArray(state.items)) {
+        state.items.forEach(function (item) {
+          if (isValidItem(item)) {
+            validItems.push(item);
+          }
+        });
+      }
+
+      // Validate appCurrency
+      var currency = state.appCurrency || 'THB';
+      if (typeof currency !== 'string') {
+        currency = 'THB';
+      }
+
+      return { items: validItems, appCurrency: currency };
+    } catch (e) {
+      // JSON parse error or localStorage access error; degrade gracefully
+      console.warn('Could not load from localStorage:', e);
+      return { items: [], appCurrency: 'THB' };
+    }
+  }
 
   // ---------- State ----------
   var items = [];              // in-memory list of all items for this session
@@ -243,6 +322,7 @@
   // ---------- App-wide currency control ----------
   appCurrencySelect.addEventListener('change', function () {
     appCurrency = appCurrencySelect.value;
+    saveState();
     renderResults(); // existing items aren't retroactively reinterpreted, just re-sorted/re-rendered
   });
 
@@ -383,6 +463,7 @@
       lastChangedId = newItem.id;
     }
 
+    saveState();
     resetForm();
     renderResults();
 
@@ -408,6 +489,7 @@
       clearTimeout(removedUndoTimeout);
       items.splice(index, 0, item); // restore at its original position
       lastChangedId = item.id;
+      saveState();
       hideToast();
       renderResults();
     };
@@ -428,6 +510,7 @@
       resetForm(); // don't leave the form editing an item that no longer exists
     }
 
+    saveState();
     renderResults();
     showUndoToast(removed, index);
   }
@@ -442,6 +525,7 @@
     toastUndoBtn.onclick = function () {
       clearTimeout(removedUndoTimeout);
       items = removedItems; // restore the whole list as it was
+      saveState();
       hideToast();
       renderResults();
     };
@@ -457,6 +541,7 @@
     lastProductName = ''; // don't carry the old name into a fully-cleared list
     resetForm(); // always return to a blank form, not just when mid-edit
 
+    saveState();
     renderResults();
     showBulkUndoToast(removedItems);
   });
@@ -655,6 +740,11 @@
   });
 
   // ---------- Init ----------
+  // Hydrate from localStorage if available
+  var storedState = loadState();
+  items = storedState.items;
+  appCurrency = storedState.appCurrency;
+
   appCurrencySelect.value = appCurrency;
   updatePromoUI();
   renderResults();

@@ -32,7 +32,7 @@
       </span>
     </div>
   </div>
-  <p class="tagline">Add items manually and find the best deal &mdash; this session only.</p>
+  <p class="tagline">Add items manually and find the best deal.</p>
   <div class="barcode-rule" aria-hidden="true"></div>
 </header>
 

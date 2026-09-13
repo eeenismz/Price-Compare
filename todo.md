@@ -174,17 +174,32 @@ link, layered on top of the working manual-entry MVP — never a blocker to manu
   `item-unit` field) to stress-test a long product name + Fixed bundle promo
   instead of a long free-text unit label — still passes at 375px, 0px overflow
 
+### Phase 4b — Client-side persistence
+- Items and the app-wide currency now persist via `localStorage` (key
+  `priceCompareState`), saved immediately on every mutation — add, edit,
+  remove (storage clears right away; the 5-second Undo toast is a pure
+  in-memory splice-back on top), Clear all, and both undo paths
+- Per-item validation on load (`isValidItem()`) skips any individual stored
+  record that doesn't match the current shape (correct types, known
+  `unitOfMeasure`/promo `type`, positive `unitSize`/`packCount`) rather than
+  failing the whole load — no old data format exists to migrate since the app
+  was session-only before this, this is purely a corruption guard
+- Reads and writes both wrapped in try/catch so a `localStorage` throw (quota,
+  private-mode restrictions) degrades to in-memory-only for that session
+  instead of crashing
+- No cross-tab live sync (each tab reads storage on its own load only) — not
+  in scope
+- Live-tested in browser: item + currency survive a hard refresh, an item
+  removal is gone from storage immediately (independent of the Undo toast
+  timing), corrupted JSON in storage falls back cleanly to the empty state,
+  and a malformed individual record (old field shape) is skipped while a
+  valid record alongside it still loads correctly
+- Updated the stale top-of-file comment and the header tagline ("this session
+  only"), both of which were no longer accurate once persistence landed
+
 ## In Progress
 
 ## Pending
-
-### Phase 4b — Client-side persistence
-Swap the in-memory `items` array for `localStorage`, saving on every mutation
-(including remove — the 5-second Undo toast is a pure in-memory splice-back on
-top, not something storage waits on) and hydrating on load. Also persist the
-app-wide currency setting. Malformed/corrupted storage on load is dropped/
-skipped rather than crashing. No cross-tab live sync (each tab reads storage
-on its own load only) — not in scope.
 
 ### Phase 4c — Photo-assisted entry + Azure AI Vision OCR proxy
 Two capture modes (shopping-app screenshot vs in-store photo), a server-side
