@@ -6,29 +6,35 @@ shipping fees, to find the actual cheapest option per unit.
 
 ## What it does
 
-- Add items manually: name, price, an optional shipping fee, a quantity
-  (defaults to 1 — divides the price when no promotion is picked, e.g. price
-  79 with quantity 2 becomes 39.50 each), and an optional unit label purely
-  for display (e.g. "per bottle").
+- Add offers manually: product name, price, an optional shipping fee, a unit
+  size + unit of measure (Milliliters/Liters/Grams/Kilograms/Piece/Sheet),
+  and a pack count — enables real cross-pack-size comparison (e.g. 850ml×3
+  vs 2200ml×1), not just same-size items.
 - Price is the listed price for one purchase, not your total spend — pick a
   promotion (Buy 1 Get 1 Free, 2nd item 50% off, Buy 3 Pay for 2, a fixed bundle
   price, or a fixed price for the 2nd item) and the app works out the real cost
-  per unit for you. Quantity is disabled while a promotion is selected, since
-  the promotion already defines its own unit count.
+  per unit for you.
 - Everything is compared in a single currency, set once via "Comparing in" in
   the header (THB/MYR/SGD/USD/PHP/VND/IDR) — no conversion, so make sure
   whatever you're comparing is actually priced in the same currency.
-- Items show as one flat list, sorted cheapest-effective-price-first, with the
-  best deal highlighted; each card's promotion or quantity tag spells out the
-  actual deal (e.g. "3 for 129.00", "Qty 2") instead of a generic label.
-- Price and Quantity fields have an (i) info button — click to see what each
+- Offers of the same product are grouped and ranked together (cheapest
+  first), with a relative-cost bar per offer and a plain-language line
+  telling you how much more the priciest option costs per litre/kilo/piece.
+  A product with only one offer entered shows a simple note instead of a
+  false comparison.
+- Unusually large unit-size values (e.g. accidentally typing Liters instead
+  of Milliliters) get flagged with a warning — non-blocking, just a nudge to
+  double-check.
+- A live "Preview" in the form shows the computed price-per-unit as you fill
+  it in, before you even submit.
+- Price and Unit size fields have an (i) info button — click to see what each
   field means without permanently taking up form space.
-- The product name field remembers what you last typed, so comparing several
-  offers of the same product doesn't mean retyping the name each time.
+- Product name and Unit of measure both remember your last entry, so
+  comparing several offers of the same product doesn't mean retyping either.
 - "Clear all" removes every item at once; removing a single item works the
   same way — both give you a 5-second undo instead of a confirmation dialog.
-- Everything lives in memory for the current page load only — nothing is saved
-  between visits.
+- Items and your chosen currency are saved automatically (via your browser's
+  local storage) and reload with you on your next visit.
 
 ## Setup
 
