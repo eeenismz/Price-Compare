@@ -197,6 +197,57 @@ link, layered on top of the working manual-entry MVP — never a blocker to manu
 - Updated the stale top-of-file comment and the header tagline ("this session
   only"), both of which were no longer accurate once persistence landed
 
+### Phase 4d — Unit-of-measure pill selector + plausibility warning (requested from user testing, 2026-09-14)
+- product-designer replaced the "Unit of measure" `<select>` with a pill/
+  radiogroup selector (Milliliters/Liters/Grams/Kilograms/Piece/Sheet — full
+  words, not abbreviations), keyboard-accessible (roving tabindex, arrow/Home/
+  End nav), matching the app's dark scanner/price-tag visual system — design
+  previewed and confirmed before production files were touched
+- Fixed a real bug: the results card's unit display had no space between
+  size and unit ("2800l" instead of "2800 l")
+- Unit of measure now remembers the last-used selection across adds, same as
+  Product name (previously always reset to Piece)
+- Added a non-blocking plausibility warning on Unit size for l/ml/kg/g (e.g.
+  "Unusually large for Liters — did you mean Milliliters?") after the user
+  hit two real magnitude typos (2800 l of detergent, 1000 l of rice) that
+  silently won Best Value; doesn't block Add Item, just flags it
+- Live-tested in browser: pill styling/keyboard nav, unit memory across adds
+  and Cancel, Edit-mode pill highlighting, localStorage reload, 375px mobile
+  wrap, and the plausibility warning firing/clearing correctly on both Add
+  and Edit
+
+### Phase 4e — Ranked per-product offers view (user loved a reference design, 2026-09-14)
+- Full redesign of the results view: offers now group by product name first
+  (each distinct product gets its own numbered 01/02/03… ranked block,
+  ordered by first-added) instead of one flat Best-Value list
+- Added a relative-cost bar per offer (width = thisOffer / mostExpensive) and
+  a computed insight sentence per product group ("you'd pay ฿X more per
+  litre/kilo/piece with the priciest option here"), scaled ×10 to litre/kilo
+  for volume/mass families, unscaled for piece/sheet
+- A product with only one offer gets a graceful fallback (no bar, no insight
+  banner, no Best Value tag) — just a quiet "add another to see how it
+  compares" note
+- Offer labels (e.g. "Qty 2", "+ shipping", a promo description) are
+  auto-derived from existing fields rather than a new free-text field — user
+  chose this over adding a manual "seller name" input
+- Form redesigned to a compact Price/Shipping and Size/Pack two-column
+  layout with a live "Preview" line showing the computed per-unit price as
+  you type (reuses `computeItemPrice()`, no duplicated math); tagline updated
+  to "Add every offer you're weighing. It sorts by what you actually pay per
+  unit."
+- Fixed a real bug found via live testing: the new `productNameOrder`
+  tracking array was only ever appended to on Add, never rebuilt from items
+  restored via `localStorage` — a hard refresh with existing saved items
+  rendered a completely empty results panel (items loaded fine into memory,
+  they just never got grouped/rendered). Fixed by seeding the array from
+  loaded items on init
+- Also fixed a column header that read "PER ML" when the actual numbers were
+  per 100ml, and removed ~100 lines of dead code left over from the old
+  flat-list card renderer
+- Live-tested in browser: multi-offer grouping/sorting, the classic
+  79-for-2-vs-129-for-3 regression inside the new layout, single-offer
+  fallback, Edit/Remove/Undo, 375px mobile stacking, and localStorage reload
+
 ## In Progress
 
 ## Pending

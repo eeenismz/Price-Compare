@@ -125,9 +125,11 @@
   var items = [];              // in-memory list of all items for this session
   var editingId = null;        // id of item currently being edited, or null when adding
   var lastProductName = '';    // remembers the last-added product name, for the next add
+  var lastUnitOfMeasure = 'piece';  // remembers the last-used unit of measure, for the next add
   var appCurrency = 'THB';     // the single app-wide currency everything is compared in, this session only
   var lastChangedId = null;    // id of the item to flash after the next render
   var removedUndoTimeout = null;
+  var productNameOrder = [];   // tracks the order product names are first added, for consistent ordering in results
 
   // ---------- DOM refs ----------
   var form = document.getElementById('item-form');
@@ -146,7 +148,8 @@
   var unitSizeInput = document.getElementById('item-unit-size');
   var unitSizeInfoBtn = document.getElementById('unit-size-info-btn');
   var unitSizeTooltip = document.getElementById('unit-size-tooltip');
-  var unitMeasureInput = document.getElementById('item-unit-measure');
+  var unitSizeWarning = document.getElementById('unit-size-warning');
+  var unitMeasureGroup = document.getElementById('item-unit-measure');
   var packCountInput = document.getElementById('item-pack-count');
   var packCountInfoBtn = document.getElementById('pack-count-info-btn');
   var packCountTooltip = document.getElementById('pack-count-tooltip');
@@ -160,6 +163,9 @@
 
   var secondFixedField = document.getElementById('second-fixed-field');
   var secondFixedYInput = document.getElementById('second-fixed-y');
+
+  var previewReadoutValue = document.getElementById('preview-readout-value');
+  var previewReadoutUnit = document.getElementById('preview-readout-unit');
 
   var submitBtn = document.getElementById('submit-btn');
   var cancelBtn = document.getElementById('cancel-edit-btn');
@@ -183,6 +189,157 @@
 
   function isMobile() {
     return window.matchMedia('(max-width: 767px)').matches;
+  }
+
+  // Get the currently selected pill's value from the radiogroup
+  function getUnitMeasureValue() {
+    var selected = unitMeasureGroup.querySelector('[aria-checked="true"]');
+    return selected ? selected.dataset.value : 'piece';
+  }
+
+  // Set a pill as selected by its data-value
+  function setUnitMeasureValue(value) {
+    var pills = Array.prototype.slice.call(unitMeasureGroup.querySelectorAll('.unit-pill'));
+    pills.forEach(function (pill) {
+      var isMatch = pill.dataset.value === value;
+      pill.setAttribute('aria-checked', isMatch ? 'true' : 'false');
+      pill.tabIndex = isMatch ? 0 : -1;
+      if (isMatch) {
+        pill.focus();
+      }
+    });
+    updateUnitSizeWarning();
+  }
+
+  // Unit sizes above these thresholds are implausible for a single consumer
+  // package and are almost always a magnitude typo (e.g. ml value typed into
+  // the Liters field) — flagged as a non-blocking warning, never prevents Add.
+  var UNIT_SIZE_WARN_THRESHOLDS = {
+    l:  { max: 30,    label: 'Liters',      suggestLabel: 'Milliliters' },
+    ml: { max: 5000,  label: 'Milliliters', suggestLabel: 'Liters' },
+    kg: { max: 50,    label: 'Kilograms',   suggestLabel: 'Grams' },
+    g:  { max: 10000, label: 'Grams',       suggestLabel: 'Kilograms' }
+  };
+
+  function updateUnitSizeWarning() {
+    var size = parseFloat(unitSizeInput.value);
+    var rule = UNIT_SIZE_WARN_THRESHOLDS[getUnitMeasureValue()];
+    if (rule && !isNaN(size) && size > rule.max) {
+      unitSizeWarning.textContent = 'Unusually large for ' + rule.label + ' — did you mean ' + rule.suggestLabel + '?';
+      unitSizeWarning.hidden = false;
+    } else {
+      unitSizeWarning.hidden = true;
+    }
+  }
+
+  unitSizeInput.addEventListener('input', updateUnitSizeWarning);
+
+  // Live preview of the computed price per base unit
+  function updatePreview() {
+    var price = parseFloat(priceInput.value);
+    var shipping = parseFloat(shippingInput.value) || 0;
+    var size = parseFloat(unitSizeInput.value);
+    var pack = parseFloat(packCountInput.value) || 1;
+    var unit = getUnitMeasureValue();
+    var promoType = promoSelect.value;
+
+    var unitLabel;
+    var family = UNIT_INFO[unit].family;
+    if (family === 'volume') {
+      unitLabel = '100ml';
+    } else if (family === 'mass') {
+      unitLabel = '100g';
+    } else {
+      unitLabel = family === 'piece' ? 'piece' : 'sheet';
+    }
+
+    // Update the unit label in the preview
+    previewReadoutUnit.textContent = '/ ' + unitLabel;
+
+    // Build a throwaway item from current form state
+    var promo = { type: promoType };
+    if (promoType === 'fixedBundle') {
+      var n = parseInt(bundleNInput.value, 10);
+      var x = parseFloat(bundleXInput.value);
+      if (!n || n < 1 || isNaN(x) || x < 0) {
+        // Incomplete promo
+        previewReadoutValue.innerHTML = '<span class="dash">—</span>';
+        return;
+      }
+      promo.n = n;
+      promo.x = x;
+    } else if (promoType === 'secondFixed') {
+      var y = parseFloat(secondFixedYInput.value);
+      if (isNaN(y) || y < 0) {
+        previewReadoutValue.innerHTML = '<span class="dash">—</span>';
+        return;
+      }
+      promo.y = y;
+    }
+
+    // Check for incomplete required fields
+    if (isNaN(price) || isNaN(size) || size <= 0) {
+      previewReadoutValue.innerHTML = '<span class="dash">—</span>';
+      return;
+    }
+
+    var tmpItem = {
+      price: price,
+      unitSize: size,
+      unitOfMeasure: unit,
+      packCount: pack,
+      shippingFee: shipping,
+      promo: promo
+    };
+
+    var pricing = computeItemPrice(tmpItem);
+    var val = pricing.pricePerBaseUnit.toFixed(2);
+    previewReadoutValue.innerHTML = val + ' <span class="unit-part">/ ' + unitLabel + '</span>';
+  }
+
+  // Wire up preview updates to all relevant inputs
+  [priceInput, shippingInput, unitSizeInput, packCountInput, promoSelect, bundleNInput, bundleXInput, secondFixedYInput].forEach(function (el) {
+    el.addEventListener('input', updatePreview);
+    el.addEventListener('change', updatePreview);
+  });
+
+  // Also update when unit pills change
+  unitMeasureGroup.addEventListener('click', updatePreview);
+
+  // Wire up pill group keyboard and click handlers
+  function initUnitPillGroup() {
+    var pills = Array.prototype.slice.call(unitMeasureGroup.querySelectorAll('.unit-pill'));
+
+    function selectPill(pill) {
+      pills.forEach(function (p) {
+        var isSelected = p === pill;
+        p.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+        p.tabIndex = isSelected ? 0 : -1;
+      });
+      pill.focus();
+      updateUnitSizeWarning();
+    }
+
+    pills.forEach(function (pill, index) {
+      pill.addEventListener('click', function () { selectPill(pill); });
+
+      pill.addEventListener('keydown', function (e) {
+        var targetIndex = null;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          targetIndex = (index + 1) % pills.length;
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          targetIndex = (index - 1 + pills.length) % pills.length;
+        } else if (e.key === 'Home') {
+          targetIndex = 0;
+        } else if (e.key === 'End') {
+          targetIndex = pills.length - 1;
+        }
+        if (targetIndex !== null) {
+          e.preventDefault();
+          selectPill(pills[targetIndex]);
+        }
+      });
+    });
   }
 
   // Compute both total cost and total base units for an item.
@@ -272,6 +429,45 @@
     return result;
   }
 
+  // Auto-derived offer label: promo description (without price), or shipping, or qty, or empty
+  function getDerivedLabel(item) {
+    if (item.promo.type === 'fixedBundle') {
+      return item.promo.n + ' for ' + appCurrency + item.promo.x.toFixed(2);
+    } else if (item.promo.type === 'secondFixed') {
+      return '2nd item at ' + appCurrency + item.promo.y.toFixed(2);
+    } else if (item.promo.type === 'bogo') {
+      return 'Buy 1 Get 1 Free';
+    } else if (item.promo.type === 'second50') {
+      return '2nd item 50% off';
+    } else if (item.promo.type === 'buy3pay2') {
+      return 'Buy 3, pay for 2';
+    } else if (item.promo.type === 'none' && item.shippingFee > 0) {
+      return '+ shipping';
+    } else if (item.promo.type === 'none' && item.packCount > 1) {
+      return 'Qty ' + item.packCount;
+    }
+    return ''; // no label
+  }
+
+  // Build the raw listing detail line: "X.XX for N × SIZE UNIT" or similar
+  function buildListingDetail(item) {
+    if (item.promo.type === 'fixedBundle') {
+      return item.promo.x.toFixed(2) + ' for ' + item.promo.n + ' × ' + item.unitSize + ' ' + item.unitOfMeasure + ' (bundle)';
+    } else if (item.packCount > 1) {
+      return item.price.toFixed(2) + ' for ' + item.packCount + ' × ' + item.unitSize + ' ' + item.unitOfMeasure;
+    } else {
+      return item.price.toFixed(2) + ' for ' + item.unitSize + ' ' + item.unitOfMeasure;
+    }
+  }
+
+  // Append shipping fee to listing detail if present
+  function appendShippingNote(detail, item) {
+    if (item.shippingFee > 0) {
+      return detail + ' (incl. ' + item.shippingFee.toFixed(0) + ' shipping)';
+    }
+    return detail;
+  }
+
   // ---------- Promo select UI (show/hide extra fields + helper text) ----------
   function updatePromoUI() {
     var type = promoSelect.value;
@@ -332,14 +528,15 @@
     form.reset();
     nameInput.value = lastProductName; // pre-fill with the last name — comparing offers of the same product shouldn't mean retyping it each time
     unitSizeInput.value = '';
-    unitMeasureInput.value = 'piece';
+    setUnitMeasureValue(lastUnitOfMeasure); // use the last-selected unit, defaulting to 'piece'
     packCountInput.value = '1';
     promoSelect.value = 'none';
     updatePromoUI();
-    submitBtn.textContent = 'Add Item';
+    submitBtn.textContent = 'Add Offer';
     cancelBtn.hidden = true;
-    formSummary.textContent = 'Add Item';
+    formSummary.textContent = 'Add an Offer';
     nameError.hidden = true;
+    updatePreview();
   }
 
   // Clear the "enter a product name" message as soon as the user types a valid name.
@@ -357,7 +554,7 @@
     nameInput.value = item.name;
     priceInput.value = item.price;
     unitSizeInput.value = item.unitSize;
-    unitMeasureInput.value = item.unitOfMeasure;
+    setUnitMeasureValue(item.unitOfMeasure);
     packCountInput.value = item.packCount;
     shippingInput.value = item.shippingFee || '';
     promoSelect.value = item.promo.type;
@@ -372,9 +569,10 @@
 
     submitBtn.textContent = 'Save changes';
     cancelBtn.hidden = false;
-    formSummary.textContent = 'Edit item';
+    formSummary.textContent = 'Edit an Offer';
 
     formDetails.open = true; // always reveal the form when entering edit mode
+    updatePreview();
     nameInput.focus();
   }
 
@@ -392,7 +590,7 @@
     var name = nameInput.value.trim();
     var price = parseFloat(priceInput.value);
     var unitSize = parseFloat(unitSizeInput.value);
-    var unitOfMeasure = unitMeasureInput.value;
+    var unitOfMeasure = getUnitMeasureValue();
     var packCount = parseInt(packCountInput.value, 10);
     var shippingFeeRaw = shippingInput.value.trim();
     var shippingFee = shippingFeeRaw === '' ? 0 : parseFloat(shippingFeeRaw);
@@ -421,6 +619,7 @@
     }
 
     lastProductName = name; // remember for the next add
+    lastUnitOfMeasure = unitOfMeasure; // remember for the next add
 
     var promo = { type: promoType };
 
@@ -460,6 +659,10 @@
         promo: promo
       };
       items.push(newItem);
+      // Track product name order: only add if this is the first time we've seen this product name
+      if (productNameOrder.indexOf(name) === -1) {
+        productNameOrder.push(name);
+      }
       lastChangedId = newItem.id;
     }
 
@@ -538,6 +741,7 @@
 
     var removedItems = items;
     items = [];
+    productNameOrder = [];
     lastProductName = ''; // don't carry the old name into a fully-cleared list
     resetForm(); // always return to a blank form, not just when mid-edit
 
@@ -547,112 +751,6 @@
   });
 
   // ---------- Rendering ----------
-  function buildItemCard(item, pricing, isBest) {
-    var li = document.createElement('li');
-    li.className = 'item-card' + (isBest ? ' best-value' : '');
-    li.dataset.id = item.id;
-
-    if (isBest) {
-      var badge = document.createElement('span');
-      badge.className = 'badge-best';
-      badge.textContent = 'Best Value';
-      li.appendChild(badge);
-    }
-
-    var main = document.createElement('div');
-    main.className = 'item-card-main';
-
-    var info = document.createElement('div');
-    info.className = 'item-card-info';
-
-    var nameEl = document.createElement('h3');
-    nameEl.className = 'item-name';
-    nameEl.textContent = item.name;
-    info.appendChild(nameEl);
-
-    var chipText = getPromoChipText(item);
-    if (chipText) {
-      var chip = document.createElement('span');
-      chip.className = 'promo-chip';
-      chip.textContent = chipText;
-      info.appendChild(document.createElement('br'));
-      info.appendChild(chip);
-    }
-
-    main.appendChild(info);
-
-    var priceBox = document.createElement('div');
-    priceBox.className = 'item-card-price';
-
-    var originalLine = document.createElement('p');
-    originalLine.className = 'item-original';
-
-    // Format: "199.00 for 3 × 850ml" or "199.00 for 850ml" or just "199.00" if packCount is 1
-    var displayText;
-
-    if (item.promo.type === 'fixedBundle') {
-      // Fixed bundle ignores item.price entirely — show the bundle's own total (X)
-      // and pack count (N) instead, since leading with the unused Price field
-      // is exactly the "Price silently means something else" confusion this
-      // rewrite exists to eliminate.
-      displayText = item.promo.x.toFixed(2) + ' for ' + item.promo.n + ' × ' + item.unitSize + item.unitOfMeasure + ' (bundle)';
-    } else if (item.packCount > 1) {
-      displayText = item.price.toFixed(2);
-      displayText += ' for ' + item.packCount + ' × ' + item.unitSize + item.unitOfMeasure;
-    } else {
-      displayText = item.price.toFixed(2) + ' for ' + item.unitSize + item.unitOfMeasure;
-    }
-
-    originalLine.textContent = displayText;
-    priceBox.appendChild(originalLine);
-
-    if (item.shippingFee > 0) {
-      var shippingLine = document.createElement('p');
-      shippingLine.className = 'item-shipping';
-      shippingLine.textContent = '+ ' + item.shippingFee.toFixed(2) + ' shipping';
-      priceBox.appendChild(shippingLine);
-    }
-
-    var effLine = document.createElement('p');
-    effLine.className = 'effective-line';
-
-    var effPriceSpan = document.createElement('span');
-    effPriceSpan.className = 'effective-price';
-    effPriceSpan.textContent = pricing.pricePerBaseUnit.toFixed(2);
-    effLine.appendChild(effPriceSpan);
-
-    var unitLabelSpan = document.createElement('span');
-    unitLabelSpan.className = 'effective-unit';
-    unitLabelSpan.textContent = ' / ' + pricing.unitLabel;
-    effLine.appendChild(unitLabelSpan);
-
-    priceBox.appendChild(effLine);
-    main.appendChild(priceBox);
-
-    li.appendChild(main);
-
-    var actions = document.createElement('div');
-    actions.className = 'item-card-actions';
-
-    var editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'btn-edit';
-    editBtn.textContent = 'Edit';
-    editBtn.dataset.id = item.id;
-    actions.appendChild(editBtn);
-
-    var removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'btn-remove';
-    removeBtn.textContent = '✕ Remove';
-    removeBtn.dataset.id = item.id;
-    actions.appendChild(removeBtn);
-
-    li.appendChild(actions);
-
-    return li;
-  }
-
   function renderResults() {
     resultsGroups.innerHTML = '';
 
@@ -664,58 +762,308 @@
     emptyState.hidden = true;
     resultsToolbar.hidden = false;
 
-    // Group items by family (volume, mass, piece, sheet)
-    var familyGroups = {
-      volume: [],
-      mass: [],
-      piece: [],
-      sheet: []
-    };
-
+    // Group items by product name, in the order names were first added
+    var productGroups = {};
     items.forEach(function (item) {
-      var pricing = computeItemPrice(item);
-      familyGroups[pricing.family].push({ item: item, pricing: pricing });
+      var name = item.name.trim();
+      if (!productGroups[name]) {
+        productGroups[name] = [];
+      }
+      productGroups[name].push(item);
     });
 
-    var familiesPresent = [];
-    if (familyGroups.volume.length > 0) familiesPresent.push('volume');
-    if (familyGroups.mass.length > 0) familiesPresent.push('mass');
-    if (familyGroups.piece.length > 0) familiesPresent.push('piece');
-    if (familyGroups.sheet.length > 0) familiesPresent.push('sheet');
+    // Render each product group in order
+    productNameOrder.forEach(function (productName) {
+      if (!productGroups[productName]) return;
 
-    // If multiple families present, show a note
-    if (familiesPresent.length > 1) {
-      var note = document.createElement('div');
-      note.className = 'family-note';
-      note.textContent = 'Comparing across incompatible units — grouped separately, no direct Best Value between groups.';
-      resultsGroups.appendChild(note);
-    }
+      var groupItems = productGroups[productName];
 
-    // Render each family group
-    familiesPresent.forEach(function (family) {
-      var familyItems = familyGroups[family];
-      if (familyItems.length === 0) return;
+      // Compute pricing for all items in this group
+      var itemsWithPricing = groupItems.map(function (item) {
+        return { item: item, pricing: computeItemPrice(item) };
+      });
 
-      // Sort by price per base unit ascending
-      familyItems.sort(function (a, b) {
+      // Sort by price per base unit (ascending)
+      itemsWithPricing.sort(function (a, b) {
         return a.pricing.pricePerBaseUnit - b.pricing.pricePerBaseUnit;
       });
 
-      var minPrice = familyItems[0].pricing.pricePerBaseUnit;
+      // Check for incompatible unit families within this product group
+      var families = {};
+      itemsWithPricing.forEach(function (entry) {
+        families[entry.pricing.family] = true;
+      });
+      var familiesList = Object.keys(families).sort();
+      var hasIncompatibleFamilies = familiesList.length > 1;
 
-      var list = document.createElement('ul');
-      list.className = 'item-list';
+      // Create product group container
+      var groupDiv = document.createElement('div');
+      groupDiv.className = 'product-group';
 
-      familyItems.forEach(function (entry) {
-        // Mark as Best Value if within epsilon tolerance and there's more than 1 item in the family
-        var isBest = familyItems.length > 1 && Math.abs(entry.pricing.pricePerBaseUnit - minPrice) < 0.005;
-        list.appendChild(buildItemCard(entry.item, entry.pricing, isBest));
+      // Product group header
+      var headerDiv = document.createElement('div');
+      headerDiv.className = 'product-group-header';
+
+      var nameSpan = document.createElement('span');
+      nameSpan.className = 'product-name';
+      nameSpan.textContent = productName;
+      headerDiv.appendChild(nameSpan);
+
+      var countSpan = document.createElement('span');
+      countSpan.className = 'product-offer-count';
+      countSpan.textContent = itemsWithPricing.length + ' offer' + (itemsWithPricing.length === 1 ? '' : 's');
+      headerDiv.appendChild(countSpan);
+
+      groupDiv.appendChild(headerDiv);
+
+      // If incompatible families, show warning
+      if (hasIncompatibleFamilies) {
+        var familyWarning = document.createElement('div');
+        familyWarning.className = 'family-note';
+        familyWarning.textContent = 'Comparing across incompatible units — no direct Best Value.';
+        groupDiv.appendChild(familyWarning);
+      }
+
+      // For multi-offer groups, show insight banner
+      if (itemsWithPricing.length > 1) {
+        var bestEntry = itemsWithPricing[0];
+        var priciest = itemsWithPricing[itemsWithPricing.length - 1];
+
+        // Calculate the "more you'd pay" amount
+        var priceDiff = priciest.pricing.pricePerBaseUnit - bestEntry.pricing.pricePerBaseUnit;
+        var scaleMultiplier = (bestEntry.pricing.family === 'volume' || bestEntry.pricing.family === 'mass') ? 10 : 1;
+        var scaledDiff = priceDiff * scaleMultiplier;
+        var unitWord = bestEntry.pricing.family === 'volume' ? 'litre' :
+                       bestEntry.pricing.family === 'mass' ? 'kilo' :
+                       bestEntry.pricing.family;
+
+        var derivedLabel = getDerivedLabel(bestEntry.item);
+        var listingDetail = buildListingDetail(bestEntry.item);
+        if (bestEntry.item.shippingFee > 0) {
+          listingDetail = appendShippingNote(listingDetail, bestEntry.item);
+        }
+
+        var bannerDiv = document.createElement('div');
+        bannerDiv.className = 'insight-banner';
+
+        var iconSpan = document.createElement('span');
+        iconSpan.className = 'insight-icon';
+        iconSpan.setAttribute('aria-hidden', 'true');
+        bannerDiv.appendChild(iconSpan);
+
+        var textDiv = document.createElement('div');
+        textDiv.className = 'insight-text';
+
+        var headlineP = document.createElement('p');
+        headlineP.className = 'insight-headline';
+        headlineP.innerHTML = productName + ' &middot; ' +
+          (derivedLabel ? derivedLabel + ' ' : '') +
+          'wins at <span class="mono">' + appCurrency + bestEntry.pricing.pricePerBaseUnit.toFixed(2) + '</span>/' +
+          bestEntry.pricing.unitLabel;
+        textDiv.appendChild(headlineP);
+
+        var subP = document.createElement('p');
+        subP.className = 'insight-sub';
+        subP.innerHTML = '<span class="mono">' + listingDetail + '</span>' +
+          (derivedLabel ? ' &middot; ' + derivedLabel : '') +
+          ' &middot; you&rsquo;d pay <span class="mono">' + appCurrency + scaledDiff.toFixed(2) + '</span> more per ' + unitWord + ' with the priciest option here.';
+        textDiv.appendChild(subP);
+
+        bannerDiv.appendChild(textDiv);
+        groupDiv.appendChild(bannerDiv);
+      } else {
+        // Single offer: show note
+        var noteP = document.createElement('p');
+        noteP.className = 'single-offer-note';
+        noteP.textContent = 'Only one offer entered — add another to see how it compares.';
+        groupDiv.appendChild(noteP);
+      }
+
+      // Build ranked table
+      var table = document.createElement('div');
+      table.className = 'ranked-table';
+      table.setAttribute('role', 'table');
+      table.setAttribute('aria-label', productName + ' offers ranked by price per ' + itemsWithPricing[0].pricing.unitLabel.toLowerCase());
+
+      // Table header (hidden on mobile)
+      if (itemsWithPricing.length > 1) {
+        var headerRow = document.createElement('div');
+        headerRow.className = 'ranked-row ranked-head';
+        headerRow.setAttribute('role', 'row');
+
+        var rankColHeader = document.createElement('span');
+        rankColHeader.setAttribute('role', 'columnheader');
+        rankColHeader.setAttribute('style', 'grid-area:rank;');
+        rankColHeader.textContent = '#';
+        headerRow.appendChild(rankColHeader);
+
+        var offerColHeader = document.createElement('span');
+        offerColHeader.setAttribute('role', 'columnheader');
+        offerColHeader.setAttribute('style', 'grid-area:offer;');
+        offerColHeader.textContent = 'Offer';
+        headerRow.appendChild(offerColHeader);
+
+        var costColHeader = document.createElement('span');
+        costColHeader.setAttribute('role', 'columnheader');
+        costColHeader.setAttribute('style', 'grid-area:cost;');
+        costColHeader.textContent = 'Relative cost';
+        headerRow.appendChild(costColHeader);
+
+        var priceColHeader = document.createElement('span');
+        priceColHeader.setAttribute('role', 'columnheader');
+        priceColHeader.setAttribute('style', 'grid-area:price;');
+        priceColHeader.textContent = 'Per ' + itemsWithPricing[0].pricing.unitLabel.toLowerCase();
+        headerRow.appendChild(priceColHeader);
+
+        var actionsColHeader = document.createElement('span');
+        actionsColHeader.setAttribute('role', 'columnheader');
+        actionsColHeader.setAttribute('style', 'grid-area:actions;');
+        headerRow.appendChild(actionsColHeader);
+
+        table.appendChild(headerRow);
+      }
+
+      // Table rows
+      var maxPrice = itemsWithPricing[itemsWithPricing.length - 1].pricing.pricePerBaseUnit;
+
+      itemsWithPricing.forEach(function (entry, idx) {
+        var item = entry.item;
+        var pricing = entry.pricing;
+        var rank = idx + 1;
+        var isBest = rank === 1;
+
+        var row = document.createElement('div');
+        row.className = 'ranked-row' + (isBest ? ' best-row' : '');
+        if (itemsWithPricing.length === 1) {
+          row.className += ' single-offer';
+        }
+        row.setAttribute('role', 'row');
+        row.dataset.id = item.id;
+
+        // Rank cell
+        var rankCell = document.createElement('span');
+        rankCell.className = 'rank-num';
+        rankCell.setAttribute('role', 'cell');
+        rankCell.textContent = (rank < 10 ? '0' : '') + rank;
+        row.appendChild(rankCell);
+
+        // Offer cell
+        var offerCell = document.createElement('div');
+        offerCell.className = 'offer-cell';
+        offerCell.setAttribute('role', 'cell');
+
+        var labelLine = document.createElement('div');
+        labelLine.className = 'offer-label-line';
+
+        var labelSpan = document.createElement('span');
+        labelSpan.className = 'offer-label';
+        labelSpan.textContent = getDerivedLabel(item) || productName;
+        labelLine.appendChild(labelSpan);
+
+        if (isBest && itemsWithPricing.length > 1) {
+          var bestTag = document.createElement('span');
+          bestTag.className = 'tag-best-inline';
+          bestTag.textContent = 'Best Value';
+          labelLine.appendChild(bestTag);
+        }
+
+        offerCell.appendChild(labelLine);
+
+        var subDetail = document.createElement('p');
+        subDetail.className = 'offer-sub';
+        var detail = buildListingDetail(item);
+        if (item.shippingFee > 0) {
+          detail = appendShippingNote(detail, item);
+        }
+        subDetail.textContent = detail;
+        offerCell.appendChild(subDetail);
+
+        row.appendChild(offerCell);
+
+        // Cost cell (only for multi-offer groups)
+        if (itemsWithPricing.length > 1) {
+          var costCell = document.createElement('div');
+          costCell.className = 'cost-cell';
+          costCell.setAttribute('role', 'cell');
+
+          var barTrack = document.createElement('div');
+          barTrack.className = 'cost-bar-track';
+
+          var barFill = document.createElement('div');
+          barFill.className = 'cost-bar-fill' + (isBest ? ' best' : '');
+          var barWidth = (pricing.pricePerBaseUnit / maxPrice) * 100;
+          barFill.style.width = barWidth + '%';
+          barTrack.appendChild(barFill);
+          costCell.appendChild(barTrack);
+
+          var barLabel = document.createElement('span');
+          barLabel.className = 'cost-bar-label' + (isBest ? ' best-label' : '');
+          if (isBest) {
+            barLabel.textContent = 'cheapest per ' + pricing.unitLabel.toLowerCase();
+          } else {
+            var priceDiffPercent = ((pricing.pricePerBaseUnit - itemsWithPricing[0].pricing.pricePerBaseUnit) / itemsWithPricing[0].pricing.pricePerBaseUnit) * 100;
+            barLabel.textContent = '+' + priceDiffPercent.toFixed(2) + '% vs best';
+          }
+          costCell.appendChild(barLabel);
+
+          row.appendChild(costCell);
+        }
+
+        // Price cell
+        var priceCell = document.createElement('div');
+        priceCell.className = 'price-cell';
+        priceCell.setAttribute('role', 'cell');
+
+        var bigPrice = document.createElement('span');
+        bigPrice.className = 'big';
+        bigPrice.textContent = pricing.pricePerBaseUnit.toFixed(2);
+        priceCell.appendChild(bigPrice);
+
+        var unitLabel = document.createElement('span');
+        unitLabel.className = 'unit-sub';
+        unitLabel.textContent = '/' + pricing.unitLabel;
+        priceCell.appendChild(unitLabel);
+
+        row.appendChild(priceCell);
+
+        // Actions cell
+        var actionsCell = document.createElement('div');
+        actionsCell.className = 'row-actions';
+        actionsCell.setAttribute('role', 'cell');
+
+        var editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'btn-edit-sm';
+        editBtn.textContent = 'Edit';
+        editBtn.dataset.id = item.id;
+        actionsCell.appendChild(editBtn);
+
+        var removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn-remove-sm';
+        removeBtn.setAttribute('aria-label', 'Remove offer');
+        removeBtn.textContent = '×';
+        removeBtn.dataset.id = item.id;
+        actionsCell.appendChild(removeBtn);
+
+        row.appendChild(actionsCell);
+
+        table.appendChild(row);
       });
 
-      resultsGroups.appendChild(list);
+      groupDiv.appendChild(table);
+      resultsGroups.appendChild(groupDiv);
+
+      // Add divider between product groups (except after the last one)
+      if (productName !== productNameOrder[productNameOrder.length - 1]) {
+        var divider = document.createElement('div');
+        divider.className = 'product-group-divider';
+        divider.setAttribute('aria-hidden', 'true');
+        resultsGroups.appendChild(divider);
+      }
     });
 
-    // Flash the row that was just added/edited/restored, as a visible confirmation.
+    // Flash the row that was just added/edited/restored
     if (lastChangedId) {
       var row = resultsGroups.querySelector('[data-id="' + lastChangedId + '"]');
       if (row) {
@@ -728,12 +1076,12 @@
 
   // ---------- Delegated clicks for Edit / Remove ----------
   resultsGroups.addEventListener('click', function (e) {
-    var editBtn = e.target.closest('.btn-edit');
+    var editBtn = e.target.closest('.btn-edit-sm');
     if (editBtn) {
       startEdit(editBtn.dataset.id);
       return;
     }
-    var removeBtn = e.target.closest('.btn-remove');
+    var removeBtn = e.target.closest('.btn-remove-sm');
     if (removeBtn) {
       removeItem(removeBtn.dataset.id);
     }
@@ -745,7 +1093,18 @@
   items = storedState.items;
   appCurrency = storedState.appCurrency;
 
+  // Rebuild product name order from loaded items — productNameOrder is only
+  // appended to on add (see submit handler), so a fresh page load needs it
+  // seeded from whatever was restored, in the order those items appear.
+  items.forEach(function (item) {
+    var name = item.name.trim();
+    if (productNameOrder.indexOf(name) === -1) {
+      productNameOrder.push(name);
+    }
+  });
+
   appCurrencySelect.value = appCurrency;
   updatePromoUI();
+  initUnitPillGroup();
   renderResults();
 })();

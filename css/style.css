@@ -239,6 +239,45 @@ summary:focus-visible {
   min-height: 1em;
 }
 
+/* Live PREVIEW readout */
+.preview-readout {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 10px 14px;
+  margin: 4px 0 14px;
+}
+
+.preview-readout-label {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.preview-readout-value {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.15rem;
+  color: var(--tag-gold);
+}
+
+.preview-readout-value .dash {
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.preview-readout-value .unit-part {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+
 .info-btn {
   display: inline-flex;
   align-items: center;
@@ -330,6 +369,86 @@ summary:focus-visible {
   flex: 1;
   margin-bottom: 0;
   min-width: 0;
+}
+
+.field-row-3 {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.field-row-3 .field {
+  flex: 1;
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.unit-compact-wrap {
+  margin-top: 10px;
+  margin-bottom: 14px;
+}
+
+.unit-compact-wrap .unit-pill-group {
+  gap: 6px;
+}
+
+.unit-compact-wrap .unit-pill {
+  padding: 7px 11px;
+  font-size: 0.8rem;
+}
+
+/* ---------- Unit pill segmented control ---------- */
+.unit-pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.unit-pill {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 14px;
+  background: var(--panel-raised);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 2px; /* matches the app's inputs/buttons — no rounded "pill" shape anywhere else in this system */
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  white-space: nowrap; /* a word wrapping mid-button reads as broken, not responsive */
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.unit-pill:hover {
+  border-color: var(--text-dim);
+}
+
+/* Selected state reuses tag-gold — the app's existing "confirmed /
+   chosen" accent (Add Item button, Best Value badge) — rather than
+   scan-red, which this system reserves for live/action/focus states. */
+.unit-pill[aria-checked="true"] {
+  background: var(--tag-gold);
+  border-color: var(--tag-gold);
+  color: var(--void);
+  font-weight: 600;
+}
+
+.unit-pill[aria-checked="true"]:hover {
+  background: #e6b25a; /* same hover tint as .btn-primary:hover */
+  border-color: #e6b25a;
+}
+
+/* Focus-visible is intentionally NOT redeclared here — the global rule
+   in css/style.css (button:focus-visible → scan-red outline + glow)
+   already applies to these since they are real <button> elements. */
+
+.field .helper-text.pill-hint {
+  margin-top: 8px;
 }
 
 .promo-extra .field { flex: 1; }
@@ -435,7 +554,312 @@ summary:focus-visible {
   text-align: center;
 }
 
-/* ---------- Results list ---------- */
+/* ---------- Product groups ---------- */
+.product-group {
+  margin-bottom: 20px;
+}
+
+.product-group + .product-group {
+  margin-top: 4px;
+}
+
+.product-group-divider {
+  height: 8px;
+  margin: 28px 0 20px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--line) 0 2px,
+    transparent 2px 5px,
+    var(--line) 5px 7px,
+    transparent 7px 10px,
+    var(--line) 10px 11px,
+    transparent 11px 16px
+  );
+  opacity: 0.5;
+}
+
+.product-group-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.product-name {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+.product-offer-count {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text-dim);
+}
+
+/* Insight banner */
+.insight-banner {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: linear-gradient(180deg, var(--tag-gold-dim), transparent 55%), var(--panel);
+  border: 1px solid rgba(217, 164, 65, 0.5);
+  border-radius: 3px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.insight-icon {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.insight-icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--tag-gold);
+  border-radius: 50%;
+}
+
+.insight-icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  background: var(--tag-gold);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.insight-text {
+  min-width: 0;
+}
+
+.insight-headline {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.insight-headline .mono,
+.insight-sub .mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.insight-sub {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* Single-offer fallback note */
+.single-offer-note {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  padding: 0 2px 10px;
+}
+
+/* Ranked table (div/grid with ARIA roles) */
+.ranked-table {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.ranked-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1.6fr) minmax(0, 1.2fr) 92px auto;
+  grid-template-areas: "rank offer cost price actions";
+  column-gap: 14px;
+  align-items: center;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--line);
+  position: relative;
+}
+
+.ranked-row:last-child {
+  border-bottom: none;
+}
+
+.ranked-row.ranked-head {
+  background: var(--panel-raised);
+  padding: 10px 16px;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.ranked-row.best-row {
+  background: linear-gradient(180deg, var(--tag-gold-dim), transparent 45%), var(--panel);
+}
+
+.rank-num {
+  grid-area: rank;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.offer-cell {
+  grid-area: offer;
+  min-width: 0;
+}
+
+.offer-label-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.offer-label {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.offer-sub {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-top: 3px;
+  word-break: break-word;
+}
+
+.tag-best-inline {
+  display: inline-flex;
+  align-items: center;
+  background: var(--tag-gold);
+  color: var(--void);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.64rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 3px 10px 3px 11px;
+  clip-path: polygon(7px 0, 100% 0, 100% 100%, 7px 100%, 0 50%);
+  flex-shrink: 0;
+}
+
+.cost-cell {
+  grid-area: cost;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cost-bar-track {
+  height: 10px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.cost-bar-fill {
+  height: 100%;
+  background: var(--text-dim);
+  opacity: 0.7;
+}
+
+.cost-bar-fill.best {
+  background: var(--tag-gold);
+  opacity: 1;
+}
+
+.cost-bar-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+
+.cost-bar-label.best-label {
+  color: var(--tag-gold);
+}
+
+.price-cell {
+  grid-area: price;
+  text-align: right;
+}
+
+.price-cell .big {
+  display: block;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(1.05rem, 3vw, 1.3rem);
+  color: var(--text);
+}
+
+.ranked-row.best-row .price-cell .big {
+  color: var(--tag-gold);
+}
+
+.price-cell .unit-sub {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-dim);
+}
+
+.row-actions {
+  grid-area: actions;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.btn-edit-sm,
+.btn-remove-sm {
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+  background: var(--panel-raised);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.btn-edit-sm:hover {
+  border-color: var(--text-dim);
+}
+
+.btn-remove-sm {
+  color: #ff8078;
+  width: 34px;
+  padding: 6px 0;
+  text-align: center;
+}
+
+.btn-remove-sm:hover {
+  border-color: var(--scan-red);
+}
+
+/* Single-offer row: no cost column at all */
+.ranked-row.single-offer {
+  grid-template-columns: 34px 1fr auto auto;
+  grid-template-areas: "rank offer price actions";
+}
+
+/* ---------- Results list (legacy, kept for compat) ---------- */
 .item-list {
   list-style: none;
   margin: 0;
@@ -645,6 +1069,65 @@ summary:focus-visible {
 
   .toast.show {
     animation: toast-in 0.25s ease-out;
+  }
+}
+
+/* ---------- Mobile stacked layout (ranked table) ---------- */
+@media (max-width: 767px) {
+  .ranked-row.ranked-head {
+    display: none;
+  }
+
+  .ranked-row {
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "rank   offer"
+      "cost   cost"
+      "price  price"
+      "actions actions";
+    row-gap: 10px;
+    padding: 14px 16px;
+  }
+
+  .ranked-row.single-offer {
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "rank   offer"
+      "price  price"
+      "actions actions";
+  }
+
+  .price-cell {
+    text-align: left;
+  }
+
+  .row-actions {
+    justify-content: stretch;
+  }
+
+  .btn-edit-sm {
+    flex: 1;
+    min-height: 44px;
+  }
+
+  .btn-remove-sm {
+    min-height: 44px;
+    width: 44px;
+  }
+
+  .field-row-3 {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .product-group-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .insight-banner {
+    padding: 12px 14px;
   }
 }
 
