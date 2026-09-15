@@ -856,17 +856,30 @@
 
         var headlineP = document.createElement('p');
         headlineP.className = 'insight-headline';
-        headlineP.innerHTML = productName + ' &middot; ' +
+        headlineP.appendChild(document.createTextNode(productName + ' · ' +
           (derivedLabel ? derivedLabel + ' ' : '') +
-          'wins at <span class="mono">' + appCurrency + bestEntry.pricing.pricePerBaseUnit.toFixed(2) + '</span>/' +
-          bestEntry.pricing.unitLabel;
+          'wins at '));
+        var headlinePriceSpan = document.createElement('span');
+        headlinePriceSpan.className = 'mono';
+        headlinePriceSpan.textContent = appCurrency + bestEntry.pricing.pricePerBaseUnit.toFixed(2);
+        headlineP.appendChild(headlinePriceSpan);
+        headlineP.appendChild(document.createTextNode('/' + bestEntry.pricing.unitLabel));
         textDiv.appendChild(headlineP);
 
         var subP = document.createElement('p');
         subP.className = 'insight-sub';
-        subP.innerHTML = '<span class="mono">' + listingDetail + '</span>' +
-          (derivedLabel ? ' &middot; ' + derivedLabel : '') +
-          ' &middot; you&rsquo;d pay <span class="mono">' + appCurrency + scaledDiff.toFixed(2) + '</span> more per ' + unitWord + ' with the priciest option here.';
+        var subDetailSpan = document.createElement('span');
+        subDetailSpan.className = 'mono';
+        subDetailSpan.textContent = listingDetail;
+        subP.appendChild(subDetailSpan);
+        subP.appendChild(document.createTextNode(
+          (derivedLabel ? ' · ' + derivedLabel : '') + ' · you’d pay '
+        ));
+        var subDiffSpan = document.createElement('span');
+        subDiffSpan.className = 'mono';
+        subDiffSpan.textContent = appCurrency + scaledDiff.toFixed(2);
+        subP.appendChild(subDiffSpan);
+        subP.appendChild(document.createTextNode(' more per ' + unitWord + ' with the priciest option here.'));
         textDiv.appendChild(subP);
 
         bannerDiv.appendChild(textDiv);

@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design preview — Phase 4c: photo-assisted entry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Loads the REAL production stylesheet as-is. Everything below this line is new,
+     scoped to classes that do not exist in style.css yet, so nothing here can
+     collide with or misrepresent the shipped app. -->
+<link rel="stylesheet" href="css/style.css">
+<style>
+  /* ================================================================
+     PREVIEW-ONLY SCAFFOLDING — not part of the app, just this document
+     ================================================================ */
+  .preview-banner {
+    background: repeating-linear-gradient(135deg, rgba(255,68,56,0.12) 0 10px, transparent 10px 20px), var(--panel);
+    border-bottom: 2px dashed var(--scan-red);
+    padding: 14px 16px;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    letter-spacing: 0.02em;
+  }
+  .preview-banner strong { color: var(--text); }
+
+  .preview-shell {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 32px 16px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  .state-block-label {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .state-block-num {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--scan-red);
+    border: 1px solid var(--scan-red);
+    border-radius: 2px;
+    padding: 1px 6px;
+  }
+  .state-block-title { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+  .state-block-desc {
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    margin: -4px 0 14px;
+    max-width: 60ch;
+  }
+
+  /* ================================================================
+     REAL COMPONENT PROPOSALS — these are the classes fast-worker would
+     add to css/style.css if this design is confirmed
+     ================================================================ */
+
+  .capture-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .capture-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 8px;
+    min-height: 72px;
+    background: var(--panel-raised);
+    color: var(--text);
+    border: 1px dashed var(--line);
+    border-radius: 2px;
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.78rem;
+    line-height: 1.25;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .capture-btn:hover {
+    border-color: var(--scan-red);
+    background: var(--scan-red-dim);
+  }
+
+  .capture-btn-icon {
+    color: var(--scan-red);
+    display: block;
+  }
+
+  .capture-helper {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    margin: 0 0 16px;
+  }
+
+  .capture-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 4px 0 18px;
+  }
+
+  .capture-divider::before,
+  .capture-divider::after {
+    content: '';
+    flex: 1;
+    height: 8px;
+    background: repeating-linear-gradient(
+      90deg,
+      var(--line) 0 2px,
+      transparent 2px 5px,
+      var(--line) 5px 7px,
+      transparent 7px 10px,
+      var(--line) 10px 11px,
+      transparent 11px 16px
+    );
+    opacity: 0.6;
+  }
+
+  .capture-divider-label {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+
+  /* ---- status card: replaces the two capture buttons while a photo
+     is attached (processing / success / failure) ---- */
+  .capture-status-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+
+  .capture-status-card.status-success {
+    border-color: rgba(255, 68, 56, 0.4);
+  }
+
+  .capture-status-card.status-fail {
+    opacity: 0.92;
+  }
+
+  .capture-thumb {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    border-radius: 2px;
+    overflow: hidden;
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+  }
+
+  .thumb-fill {
+    position: absolute;
+    inset: 0;
+  }
+
+  .thumb-tag {
+    background:
+      linear-gradient(180deg, rgba(217,164,65,0.35), transparent 70%),
+      repeating-linear-gradient(0deg, rgba(236,231,218,0.06) 0 3px, transparent 3px 9px);
+  }
+
+  .thumb-screenshot {
+    background:
+      linear-gradient(160deg, rgba(255,68,56,0.22), transparent 65%),
+      repeating-linear-gradient(0deg, rgba(236,231,218,0.05) 0 2px, transparent 2px 8px);
+  }
+
+  .capture-thumb.is-processing::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,68,56,0.14), transparent 60%);
+  }
+
+  .scan-sweep {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 2px;
+    background: var(--scan-red);
+    box-shadow: 0 0 8px 1px rgba(255, 68, 56, 0.75);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .scan-sweep {
+      animation: sweep-y 1.6s ease-in-out infinite alternate;
+    }
+    @keyframes sweep-y {
+      from { top: 3px; }
+      to   { top: calc(100% - 5px); }
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .scan-sweep {
+      top: 50%;
+      opacity: 0.6;
+    }
+  }
+
+  .capture-status-text { flex: 1; min-width: 0; }
+
+  .capture-status-title {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 0.92rem;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+
+  .status-success .capture-status-title { color: var(--text); }
+
+  .capture-status-sub {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    color: var(--text-dim);
+    line-height: 1.4;
+  }
+
+  .capture-status-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .btn-status-sm {
+    min-height: 30px;
+    padding: 4px 10px;
+    border-radius: 2px;
+    border: 1px solid var(--line);
+    background: var(--panel-raised);
+    color: var(--text-dim);
+    font-family: var(--font-body);
+    font-size: 0.74rem;
+    cursor: pointer;
+  }
+
+  .btn-status-sm:hover { border-color: var(--text-dim); color: var(--text); }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: inline-block;
+    margin-right: 6px;
+  }
+
+  .status-dot.dot-processing { background: var(--scan-red); }
+  .status-dot.dot-success { background: var(--scan-red); box-shadow: 0 0 0 3px var(--scan-red-dim); }
+  .status-dot.dot-fail { background: var(--text-dim); }
+
+  /* ---- pre-filled field marking ---- */
+  .prefilled-flag {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--scan-red);
+    background: var(--scan-red-dim);
+    border: 1px solid rgba(255, 68, 56, 0.4);
+    border-radius: 2px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  .field.prefilled input {
+    border-color: rgba(255, 68, 56, 0.45);
+    box-shadow: inset 3px 0 0 var(--scan-red);
+  }
+
+  .field.prefilled .unit-pill-group { position: relative; }
+
+  /* small caption used only in the demo to show a field is intentionally
+     left blank (OCR had nothing for it) — not a new production class,
+     purely illustrative in this preview */
+  .demo-blank-caption {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    margin-top: 6px;
+  }
+</style>
+</head>
+<body>
+
+<div class="preview-banner">
+  DESIGN PREVIEW — PHASE 4C — PHOTO-ASSISTED ENTRY &nbsp;·&nbsp; <strong>not the live app</strong> &nbsp;·&nbsp; states shown statically for review
+</div>
+
+<header class="site-header">
+  <div class="site-header-top">
+    <h1>Price Compare</h1>
+    <div class="currency-control">
+      <span class="currency-control-label">Comparing in</span>
+      <span class="currency-select-wrap"><span style="color:var(--tag-gold); font-family:var(--font-mono); font-weight:600; font-size:0.85rem;">THB</span></span>
+    </div>
+  </div>
+  <p class="tagline">Add every offer you&rsquo;re weighing. It sorts by what you actually pay per unit.</p>
+  <div class="barcode-rule" aria-hidden="true"></div>
+</header>
+
+<div class="preview-shell">
+
+  <!-- ================= STATE 1 — IDLE / ENTRY POINT ================= -->
+  <section>
+    <div class="state-block-label">
+      <span class="state-block-num">01</span>
+      <span class="state-block-title">Idle — entry point</span>
+    </div>
+    <p class="state-block-desc">
+      Default state. Manual entry is the whole form, always present — photo capture is two extra
+      buttons above it, not a gate in front of it.
+    </p>
+
+    <div class="form-panel-body" style="background:var(--panel); border:1px solid var(--line); border-radius:3px;">
+      <form novalidate onsubmit="return false;">
+
+        <div class="capture-bar">
+          <button type="button" class="capture-btn">
+            <svg class="capture-btn-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/>
+              <circle cx="12" cy="13" r="3.2"/>
+            </svg>
+            Snap a price tag
+          </button>
+          <button type="button" class="capture-btn">
+            <svg class="capture-btn-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8"/>
+              <path d="M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8"/>
+              <path d="M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16"/>
+              <path d="M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/>
+              <line x1="8" y1="10.5" x2="16" y2="10.5"/>
+              <line x1="8" y1="14" x2="13" y2="14"/>
+            </svg>
+            Upload a screenshot
+          </button>
+        </div>
+        <p class="capture-helper">or paste a screenshot &mdash; &#8984;V / Ctrl+V</p>
+
+        <div class="capture-divider">
+          <span class="capture-divider-label">Manual entry</span>
+        </div>
+
+        <div class="field">
+          <label for="p1-name">Product</label>
+          <input type="text" id="p1-name" placeholder="e.g. Breeze Detergent 850ml">
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="p1-price">Price</label>
+            <input type="number" id="p1-price" placeholder="0.00">
+          </div>
+          <div class="field">
+            <label for="p1-shipping">+ Shipping <span class="optional">(optional)</span></label>
+            <input type="number" id="p1-shipping" placeholder="0">
+          </div>
+        </div>
+
+        <div class="preview-readout">
+          <span class="preview-readout-label">Preview</span>
+          <span class="preview-readout-value"><span class="dash">&mdash;</span> <span class="unit-part">/ piece</span></span>
+        </div>
+
+        <button type="submit" class="btn-primary">Add Offer</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ================= STATE 2 — PROCESSING ================= -->
+  <section>
+    <div class="state-block-label">
+      <span class="state-block-num">02</span>
+      <span class="state-block-title">Processing</span>
+    </div>
+    <p class="state-block-desc">
+      A photo was just taken/selected. The two capture buttons are replaced (same slot) by a status
+      card. Scan-line sweep is the signature moment; region is <code>aria-live="polite"</code> so the
+      text update alone is enough for screen readers.
+    </p>
+
+    <div class="form-panel-body" style="background:var(--panel); border:1px solid var(--line); border-radius:3px;">
+      <div class="capture-status-card">
+        <div class="capture-thumb is-processing">
+          <div class="thumb-fill thumb-tag"></div>
+          <div class="scan-sweep"></div>
+        </div>
+        <div class="capture-status-text">
+          <div class="capture-status-title"><span class="status-dot dot-processing"></span>Reading photo&hellip;</div>
+          <div class="capture-status-sub">This can take a few seconds.</div>
+          <div class="capture-status-actions">
+            <button type="button" class="btn-status-sm">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="capture-divider">
+        <span class="capture-divider-label">Manual entry</span>
+      </div>
+
+      <div class="field">
+        <label for="p2-name">Product</label>
+        <input type="text" id="p2-name" placeholder="e.g. Breeze Detergent 850ml" disabled>
+      </div>
+      <p class="capture-helper" style="margin-top:-6px;">Fields stay editable &mdash; nothing is locked while it reads.</p>
+    </div>
+  </section>
+
+  <!-- ================= STATE 3 — SUCCESS, FULL EXTRACTION ================= -->
+  <section>
+    <div class="state-block-label">
+      <span class="state-block-num">03</span>
+      <span class="state-block-title">Success &mdash; full extraction</span>
+    </div>
+    <p class="state-block-desc">
+      Screenshot mode. Every field the photo actually gave a value for gets a small
+      <code>from photo</code> flag and a scan-red left-edge accent &mdash; a deliberate "double check
+      this" cue, not a "this is correct" one. Tag-gold is intentionally not used here since nothing is
+      confirmed yet.
+    </p>
+
+    <div class="form-panel-body" style="background:var(--panel); border:1px solid var(--line); border-radius:3px;">
+      <div class="capture-status-card status-success">
+        <div class="capture-thumb">
+          <div class="thumb-fill thumb-screenshot"></div>
+        </div>
+        <div class="capture-status-text">
+          <div class="capture-status-title"><span class="status-dot dot-success"></span>Pre-filled from photo</div>
+          <div class="capture-status-sub">Check the flagged fields below before adding.</div>
+          <div class="capture-status-actions">
+            <button type="button" class="btn-status-sm">Retake</button>
+            <button type="button" class="btn-status-sm">Remove</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="capture-divider">
+        <span class="capture-divider-label">Manual entry</span>
+      </div>
+
+      <div class="field prefilled">
+        <label for="p3-name">Product <span class="prefilled-flag">from photo</span></label>
+        <input type="text" id="p3-name" value="Breeze Matic Detergent Powder 850g">
+      </div>
+
+      <div class="field-row">
+        <div class="field prefilled">
+          <label for="p3-price">Price <span class="prefilled-flag">from photo</span></label>
+          <input type="number" id="p3-price" value="129.00">
+        </div>
+        <div class="field">
+          <label for="p3-shipping">+ Shipping <span class="optional">(optional)</span></label>
+          <input type="number" id="p3-shipping" placeholder="0">
+        </div>
+      </div>
+
+      <div class="field-row-3">
+        <div class="field prefilled">
+          <label for="p3-size">Size <span class="prefilled-flag">from photo</span></label>
+          <input type="number" id="p3-size" value="850">
+        </div>
+        <div class="field prefilled">
+          <label for="p3-pack">Pack <span class="prefilled-flag">from photo</span></label>
+          <input type="number" id="p3-pack" value="1">
+        </div>
+      </div>
+
+      <div class="unit-compact-wrap prefilled">
+        <label id="p3-unit-label">Unit <span class="prefilled-flag">from photo</span></label>
+        <div class="unit-pill-group" role="radiogroup" aria-labelledby="p3-unit-label">
+          <button type="button" class="unit-pill" role="radio" aria-checked="false" tabindex="-1">Milliliters</button>
+          <button type="button" class="unit-pill" role="radio" aria-checked="false" tabindex="-1">Liters</button>
+          <button type="button" class="unit-pill" role="radio" aria-checked="true" tabindex="0">Grams</button>
+          <button type="button" class="unit-pill" role="radio" aria-checked="false" tabindex="-1">Kilograms</button>
+          <button type="button" class="unit-pill" role="radio" aria-checked="false" tabindex="-1">Piece</button>
+          <button type="button" class="unit-pill" role="radio" aria-checked="false" tabindex="-1">Sheet</button>
+        </div>
+      </div>
+
+      <div class="preview-readout">
+        <span class="preview-readout-label">Preview</span>
+        <span class="preview-readout-value" style="color:var(--tag-gold); font-weight:700;">15.18 <span class="unit-part">/ 100g</span></span>
+      </div>
+
+      <button type="submit" class="btn-primary">Add Offer</button>
+    </div>
+  </section>
+
+  <!-- ================= STATE 4 — SUCCESS, PARTIAL EXTRACTION ================= -->
+  <section>
+    <div class="state-block-label">
+      <span class="state-block-num">04</span>
+      <span class="state-block-title">Success &mdash; partial extraction</span>
+    </div>
+    <p class="state-block-desc">
+      In-store photo mode. Glare on the shelf tag meant the OCR text had a size but no readable price
+      &mdash; only Product and Size get flagged; Price is left exactly as blank-state, ready to type,
+      no implication it was attempted and lost.
+    </p>
+
+    <div class="form-panel-body" style="background:var(--panel); border:1px solid var(--line); border-radius:3px;">
+      <div class="capture-status-card status-success">
+        <div class="capture-thumb">
+          <div class="thumb-fill thumb-tag"></div>
+        </div>
+        <div class="capture-status-text">
+          <div class="capture-status-title"><span class="status-dot dot-success"></span>Filled in what we could read</div>
+          <div class="capture-status-sub">Couldn&rsquo;t make out the price &mdash; check the rest below.</div>
+          <div class="capture-status-actions">
+            <button type="button" class="btn-status-sm">Retake</button>
+            <button type="button" class="btn-status-sm">Remove</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="capture-divider">
+        <span class="capture-divider-label">Manual entry</span>
+      </div>
+
+      <div class="field prefilled">
+        <label for="p4-name">Product <span class="prefilled-flag">from photo</span></label>
+        <input type="text" id="p4-name" value="Lays Classic Potato Chips 60g">
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="p4-price">Price</label>
+          <input type="number" id="p4-price" placeholder="0.00">
+          <p class="demo-blank-caption">Not flagged &mdash; still blank, not implied to be correct.</p>
+        </div>
+        <div class="field">
+          <label for="p4-shipping">+ Shipping <span class="optional">(optional)</span></label>
+          <input type="number" id="p4-shipping" placeholder="0">
+        </div>
+      </div>
+
+      <div class="field-row-3">
+        <div class="field prefilled">
+          <label for="p4-size">Size <span class="prefilled-flag">from photo</span></label>
+          <input type="number" id="p4-size" value="60">
+        </div>
+        <div class="field">
+          <label for="p4-pack">Pack</label>
+          <input type="number" id="p4-pack" value="1">
+        </div>
+      </div>
+
+      <button type="submit" class="btn-primary">Add Offer</button>
+    </div>
+  </section>
+
+  <!-- ================= STATE 5 — FAILURE / FALLBACK ================= -->
+  <section>
+    <div class="state-block-label">
+      <span class="state-block-num">05</span>
+      <span class="state-block-title">Failure &mdash; nothing usable</span>
+    </div>
+    <p class="state-block-desc">
+      OCR failed, timed out, or returned nothing parseable. Neutral tone on purpose &mdash; this is a
+      likely, ordinary outcome for a blurry shelf photo, not an error the user caused. The form below
+      is identical to the idle-state empty form: no dead end, nothing to undo.
+    </p>
+
+    <div class="form-panel-body" style="background:var(--panel); border:1px solid var(--line); border-radius:3px;">
+      <div class="capture-status-card status-fail">
+        <div class="capture-thumb">
+          <div class="thumb-fill thumb-tag" style="filter:grayscale(0.6) brightness(0.7);"></div>
+        </div>
+        <div class="capture-status-text">
+          <div class="capture-status-title"><span class="status-dot dot-fail"></span>Couldn&rsquo;t read that photo</div>
+          <div class="capture-status-sub">No worries &mdash; fill in the details below.</div>
+          <div class="capture-status-actions">
+            <button type="button" class="btn-status-sm">Retake</button>
+            <button type="button" class="btn-status-sm">Remove</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="capture-divider">
+        <span class="capture-divider-label">Manual entry</span>
+      </div>
+
+      <div class="field">
+        <label for="p5-name">Product</label>
+        <input type="text" id="p5-name" placeholder="e.g. Breeze Detergent 850ml">
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="p5-price">Price</label>
+          <input type="number" id="p5-price" placeholder="0.00">
+        </div>
+        <div class="field">
+          <label for="p5-shipping">+ Shipping <span class="optional">(optional)</span></label>
+          <input type="number" id="p5-shipping" placeholder="0">
+        </div>
+      </div>
+
+      <button type="submit" class="btn-primary">Add Offer</button>
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>

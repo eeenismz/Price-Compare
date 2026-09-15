@@ -248,20 +248,46 @@ link, layered on top of the working manual-entry MVP — never a blocker to manu
   79-for-2-vs-129-for-3 regression inside the new layout, single-offer
   fallback, Edit/Remove/Undo, 375px mobile stacking, and localStorage reload
 
+### Phase 4c.pre — innerHTML XSS fix (found during Phase 4c architecture review, 2026-09-15)
+- deep-reasoner's Phase 4c architecture review flagged `js/app.js:859`/`:867`
+  building the ranked-offers insight banner via `innerHTML` with the raw
+  product name — harmless today (self-XSS, you'd have to type it yourself)
+  but becomes real XSS once product names can arrive from a scanned photo
+  (Phase 4c)
+- Fixed by building the headline/sub-line with `textContent`/DOM nodes
+  instead of string-concatenated `innerHTML`, matching how the rest of
+  `renderResults()` already builds markup
+- Synced dist/js/app.js
+- Live-tested in browser: a product name containing `<b>Snacks</b> & Co`
+  renders as literal visible text in the insight banner, not interpreted as
+  markup
+
 ## In Progress
 
-## Pending
-
-### Phase 4c — Photo-assisted entry + Azure AI Vision OCR proxy (parked 2026-09-13)
+### Phase 4c — Photo-assisted entry + Azure AI Vision OCR proxy (resumed 2026-09-15)
 Two capture modes (shopping-app screenshot vs in-store photo), a server-side
 PHP proxy to Azure AI Vision's Read API (key never in client JS), client-side
 regex/heuristic extraction (not a second LLM call, to avoid an unnamed second
 paid dependency), and a review-UI that reuses the Phase 4a Add-Item form
-directly rather than a parallel code path. Parked indefinitely at the user's
-call — Phase 4a (unit-price rewrite) and 4b (persistence) covered the pain
-points that mattered most; needs an Azure account/API key to pick back up.
-Full design notes are in the session that produced this plan (2026-09-13),
-not yet re-summarized here.
+directly rather than a parallel code path.
+- product-designer: capture UI + review-flow design complete. Standalone
+  mockup covering all 5 states (Idle, Processing, Success-full,
+  Success-partial, Failure) at `design-preview-phase4c.html`, written plan at
+  `design-plan-phase4c.md` (both project root, uncommitted) — reviewed and
+  confirmed before any production files are touched
+- deep-reasoner: architecture complete for `api/ocr-proxy.php` (request/
+  response contract, abuse guards — size/type caps, per-IP + global daily
+  rate limit, timeout handling), `config.local.php` (new gitignored file for
+  the Azure key, paired with a committed `config.example.php` placeholder),
+  and `js/ocr-extract.js` (pure, DOM-free regex/heuristic extraction with
+  explicit low-confidence-leaves-field-blank rules per field)
+- Blocked purely on the user registering an Azure AI Vision resource and
+  providing its region/endpoint — determines whether the proxy targets the
+  synchronous Image Analysis 4.0 API or the async Computer Vision Read 3.2
+  API (materially different PHP code, see architecture notes). Build
+  (fast-worker + tech-reviewer) resumes as soon as that's available.
+
+## Pending
 
 ## Pending (not yet scheduled — out of scope for this pass per spec)
 - User accounts / login
