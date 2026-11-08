@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OCR extract tests</title>
+</head>
+<body>
+<pre id="out"></pre>
+<script src="../js/ocr-extract.js" charset="utf-8"></script>
+<script>
+// Fixture runner: each case gives OCR-style lines and the fields a careful human would want.
+// null means "leave it blank" (the user fills it in by hand).
+(function () {
+  'use strict';
+
+  var CASES = [
+    {
+      title: 'Thai shelf tag: 59.- and size on name line',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'น้ำยาล้างจาน ซันไลต์ 500 มล.', h: 18 },
+        { text: '59.-', h: 60 }
+      ],
+      expect: { name: 'น้ำยาล้างจาน ซันไลต์ 500 มล.', price: 59, unitSize: 500, unitOfMeasure: 'ml', packCount: null }
+    },
+    {
+      title: 'Shopee TH screenshot: sale price, sold count, shipping fee',
+      mode: 'screenshot', currency: 'THB',
+      lines: [
+        { text: 'Shopee Mall', h: 0 },
+        { text: 'ซันไลต์ น้ำยาล้างจานกลิ่นมะนาว 500 มล.', h: 20 },
+        { text: '฿259', h: 14 },
+        { text: '฿189', h: 24 },
+        { text: '-27%', h: 12 },
+        { text: 'ขายแล้ว 1.2k', h: 10 },
+        { text: 'ค่าส่ง ฿0', h: 10 }
+      ],
+      expect: { name: 'ซันไลต์ น้ำยาล้างจานกลิ่นมะนาว 500 มล.', price: 189, unitSize: 500, unitOfMeasure: 'ml', packCount: null }
+    },
+    {
+      title: 'Lazada MY screenshot: RM sale price',
+      mode: 'screenshot', currency: 'MYR',
+      lines: [
+        { text: 'Lazada Mall', h: 0 },
+        { text: 'Dettol Antibacterial Liquid Soap 450ml', h: 20 },
+        { text: 'RM15.90', h: 14 },
+        { text: 'RM12.90', h: 22 },
+        { text: '-19%', h: 12 },
+        { text: 'Free shipping', h: 10 },
+        { text: 'Sold 1.5k', h: 10 }
+      ],
+      expect: { name: 'Dettol Antibacterial Liquid Soap 450ml', price: 12.9, unitSize: 450, unitOfMeasure: 'ml', packCount: null }
+    },
+    {
+      title: '330ml x 6 pack',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'Coke Original Soft Drink Can', h: 20 },
+        { text: '330ml x 6', h: 14 },
+        { text: '฿89', h: 30 }
+      ],
+      expect: { name: 'Coke Original Soft Drink Can', price: 89, unitSize: 330, unitOfMeasure: 'ml', packCount: 6 }
+    },
+    {
+      title: '40 sheets tissue: sheet unit, no pack signal',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'Soft Facial Tissue 2-Ply', h: 18 },
+        { text: '40 sheets', h: 14 },
+        { text: '฿45', h: 30 }
+      ],
+      expect: { name: 'Soft Facial Tissue 2-Ply', price: 45, unitSize: 40, unitOfMeasure: 'sheet', packCount: null }
+    },
+    {
+      title: 'Price range ฿99 - ฿149 gives price null',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'ผ้าอนามัย 20 ชิ้น', h: 18 },
+        { text: '฿99 - ฿149', h: 30 }
+      ],
+      expect: { name: 'ผ้าอนามัย 20 ชิ้น', price: null, unitSize: 20, unitOfMeasure: 'piece', packCount: null }
+    },
+    {
+      title: 'Two conflicting sizes give size null',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'Head & Shoulders Shampoo', h: 20 },
+        { text: '400ml', h: 14 },
+        { text: '700ml', h: 14 },
+        { text: '฿199', h: 30 }
+      ],
+      expect: { name: 'Head & Shoulders Shampoo', price: 199, unitSize: null, unitOfMeasure: null, packCount: null }
+    },
+    {
+      title: 'VND thousands dots: ₫125.000 = 125000',
+      mode: 'photo', currency: 'VND',
+      lines: [
+        { text: 'Nước mắm Phú Quốc 500ml', h: 20 },
+        { text: '₫125.000', h: 30 }
+      ],
+      expect: { name: 'Nước mắm Phú Quốc 500ml', price: 125000, unitSize: 500, unitOfMeasure: 'ml', packCount: null }
+    },
+    {
+      title: 'IDR thousands dots: Rp 25.900 = 25900',
+      mode: 'photo', currency: 'IDR',
+      lines: [
+        { text: 'Indomie Goreng 85g', h: 20 },
+        { text: 'Rp 25.900', h: 30 }
+      ],
+      expect: { name: 'Indomie Goreng 85g', price: 25900, unitSize: 85, unitOfMeasure: 'g', packCount: null }
+    },
+    {
+      title: 'Partial: name and size only, no price',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'Lipton Yellow Label Tea', h: 18 },
+        { text: '25 ซอง', h: 14 }
+      ],
+      expect: { name: 'Lipton Yellow Label Tea', price: null, unitSize: 25, unitOfMeasure: 'piece', packCount: null }
+    },
+    {
+      title: 'Garbage and noisy lines give all null',
+      mode: 'screenshot', currency: 'THB',
+      lines: [
+        { text: '#@!% ;;; ~~', h: 12 },
+        { text: '|| 0O0 ..', h: 10 },
+        { text: 'a b', h: 9 },
+        { text: 'ฺ ๆ ฯ', h: 8 }
+      ],
+      expect: { name: null, price: null, unitSize: null, unitOfMeasure: null, packCount: null }
+    },
+    {
+      title: 'No currency match: US$ text while currency is THB',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'Gillette Razor Blue 3', h: 20 },
+        { text: 'US$ 12.99', h: 30 }
+      ],
+      expect: { name: 'Gillette Razor Blue 3', price: null, unitSize: null, unitOfMeasure: null, packCount: null }
+    },
+    {
+      title: 'Noisy OCR: "฿ 1 89" split by a space stays null (not 1)',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'Lux Body Wash 450 ml', h: 20 },
+        { text: '฿ 1 89', h: 28 }
+      ],
+      expect: { name: 'Lux Body Wash 450 ml', price: null, unitSize: 450, unitOfMeasure: 'ml', packCount: null }
+    },
+    {
+      title: 'Thai pack: แพ็ค 6 with 325 มล.',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'โซดาสปาร์คกลิ่นมะนาว 325 มล.', h: 18 },
+        { text: 'แพ็ค 6', h: 14 },
+        { text: '฿72', h: 28 }
+      ],
+      expect: { name: 'โซดาสปาร์คกลิ่นมะนาว 325 มล.', price: 72, unitSize: 325, unitOfMeasure: 'ml', packCount: 6 }
+    },
+    {
+      title: 'Decimal comma: "1,5 l" = 1.5 l',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'Orange Juice Pulp', h: 20 },
+        { text: '1,5 l', h: 14 },
+        { text: '฿65', h: 30 }
+      ],
+      expect: { name: 'Orange Juice Pulp', price: 65, unitSize: 1.5, unitOfMeasure: 'l', packCount: null }
+    },
+    {
+      title: 'Photo: two equal-height name lines give name null',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'Brand A Premium Rice', h: 20 },
+        { text: 'Brand B Jasmine Rice', h: 20 },
+        { text: '฿120', h: 30 }
+      ],
+      expect: { name: null, price: 120, unitSize: null, unitOfMeasure: null, packCount: null }
+    },
+
+    // ---------- Adversarial fixtures (realistic Thai/SEA shopping text) ----------
+    {
+      title: 'ADV Thai sale marker "ลด 27%" instead of "-27%": lower price wins',
+      mode: 'screenshot', currency: 'THB',
+      lines: [
+        { text: 'ซันไลต์ น้ำยาล้างจานกลิ่นมะนาว 500 มล.', h: 20 },
+        { text: '฿259', h: 14 },
+        { text: '฿189', h: 24 },
+        { text: 'ลด 27%', h: 12 }
+      ],
+      expect: { name: 'ซันไลต์ น้ำยาล้างจานกลิ่นมะนาว 500 มล.', price: 189, unitSize: 500, unitOfMeasure: 'ml', packCount: null }
+    },
+    {
+      // ฿ is misread in real OCR as "B" (this case) and as "8" ("8189"). Letter/digit currency guesses
+      // are too risky, so the price stays null and the user types it.
+      title: 'ADV Thai tag with ฿ OCR\'d as "B59": price null (no letter-to-currency guess)',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'มาม่า รสต้มยำกุ้ง 60 กรัม', h: 18 },
+        { text: 'B59', h: 60 }
+      ],
+      expect: { name: 'มาม่า รสต้มยำกุ้ง 60 กรัม', price: null, unitSize: 60, unitOfMeasure: 'g', packCount: null }
+    },
+    {
+      title: 'ADV Screenshot with 3 prices incl. voucher line: voucher ignored, sale price 189',
+      mode: 'screenshot', currency: 'THB',
+      lines: [
+        { text: 'ซันไลต์ น้ำยาล้างจานกลิ่นมะนาว 500 มล.', h: 20 },
+        { text: '฿259', h: 14 },
+        { text: '฿189', h: 24 },
+        { text: '-27%', h: 12 },
+        { text: 'Voucher ฿150 off min. spend ฿799', h: 10 }
+      ],
+      expect: { name: 'ซันไลต์ น้ำยาล้างจานกลิ่นมะนาว 500 มล.', price: 189, unitSize: 500, unitOfMeasure: 'ml', packCount: null }
+    },
+    {
+      title: 'ADV Screenshot with 3 shown prices and no way to tell: price null',
+      mode: 'screenshot', currency: 'THB',
+      lines: [
+        { text: 'Pantene Shampoo Silky Smooth Care', h: 20 },
+        { text: '฿259', h: 14 },
+        { text: '฿189', h: 24 },
+        { text: '฿159', h: 12 }
+      ],
+      expect: { name: 'Pantene Shampoo Silky Smooth Care', price: null, unitSize: null, unitOfMeasure: null, packCount: null }
+    },
+    {
+      title: 'ADV "1.500 ml" is ambiguous (1.5 or 1500): size null',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'Mineral Water Natural', h: 20 },
+        { text: '1.500 ml', h: 14 },
+        { text: '฿25', h: 30 }
+      ],
+      expect: { name: 'Mineral Water Natural', price: 25, unitSize: null, unitOfMeasure: null, packCount: null }
+    },
+    {
+      title: 'ADV Promo "ซื้อ 2 ชิ้น ลดเพิ่ม 10%": not the name, not a size/pack',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'Dove Shampoo Intense Repair', h: 20 },
+        { text: '400 ml', h: 14 },
+        { text: 'ซื้อ 2 ชิ้น ลดเพิ่ม 10%', h: 40 },
+        { text: '฿99', h: 60 }
+      ],
+      expect: { name: 'Dove Shampoo Intense Repair', price: 99, unitSize: 400, unitOfMeasure: 'ml', packCount: null }
+    },
+    {
+      title: 'ADV Promo "ซื้อ 2 ขวด ลดเพิ่ม 10%" next to 400 ml: pack must not become 2',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'Dove Shampoo Intense Repair', h: 20 },
+        { text: '400 ml', h: 14 },
+        { text: 'ซื้อ 2 ขวด ลดเพิ่ม 10%', h: 16 },
+        { text: '฿99', h: 60 }
+      ],
+      expect: { name: 'Dove Shampoo Intense Repair', price: 99, unitSize: 400, unitOfMeasure: 'ml', packCount: null }
+    },
+    {
+      // Lines below are real Tesseract.js output, copied as-is (REAL = captured from the reader, not written by hand)
+      title: 'REAL photo/THB: product line with "|" separator, no price on the label',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'น้ายาล้างจาน ซันไลต์ 500 มล.', h: 35 },
+        { text: '|', h: 29 },
+        { text: 'Sunlight Dishwashing 500ml', h: 25 }
+      ],
+      expect: { name: 'น้ายาล้างจาน ซันไลต์ 500 มล.', price: null, unitSize: 500, unitOfMeasure: 'ml', packCount: null }
+    },
+    {
+      title: 'REAL screenshot/THB: "410" and "ml" on two lines, sale junk below',
+      mode: 'screenshot', currency: 'THB',
+      lines: [
+        { text: 'Pantene Shampoo Pro-V Hair Fall Control 410', h: 19 },
+        { text: 'ml', h: 15 },
+        { text: '8189 62๒', h: 27 },
+        { text: 'ขายแล้ว 1.26', h: 11 },
+        { text: 'ค่าส่ง BO', h: 15 },
+        { text: 'ซื้อเลย', h: 15 }
+      ],
+      expect: { name: 'Pantene Shampoo Pro-V Hair Fall Control 410', price: null, unitSize: 410, unitOfMeasure: 'ml', packCount: null }
+    },
+
+    {
+      title: 'ADV "Rating 4.9 (2.3k)" line is not price, size or name',
+      mode: 'screenshot', currency: 'THB',
+      lines: [
+        { text: 'Dettol Hand Wash Refill Original', h: 20 },
+        { text: 'Rating 4.9 (2.3k)', h: 12 },
+        { text: '฿189', h: 24 }
+      ],
+      expect: { name: 'Dettol Hand Wash Refill Original', price: 189, unitSize: null, unitOfMeasure: null, packCount: null }
+    },
+    {
+      title: 'ADV MYR "RM12.90" with "Free shipping above RM40": RM40 ignored',
+      mode: 'screenshot', currency: 'MYR',
+      lines: [
+        { text: 'Dettol Antibacterial Liquid Soap 450ml', h: 20 },
+        { text: 'RM12.90', h: 24 },
+        { text: 'Free shipping above RM40', h: 10 }
+      ],
+      expect: { name: 'Dettol Antibacterial Liquid Soap 450ml', price: 12.9, unitSize: 450, unitOfMeasure: 'ml', packCount: null }
+    },
+    {
+      title: 'ADV Trailing "129 บาท" is a price',
+      mode: 'photo', currency: 'THB',
+      lines: [
+        { text: 'ข้าวหอมมะลิ ตราฉัตร 1 กก.', h: 18 },
+        { text: '129 บาท', h: 50 }
+      ],
+      expect: { name: 'ข้าวหอมมะลิ ตราฉัตร 1 กก.', price: 129, unitSize: 1, unitOfMeasure: 'kg', packCount: null }
+    }
+  ];
+
+  var out = [];
+  var fails = 0;
+
+  CASES.forEach(function (c) {
+    var got = window.OcrExtract.extract(c.lines, { mode: c.mode, currency: c.currency });
+    var bad = [];
+    Object.keys(c.expect).forEach(function (k) {
+      if (got[k] !== c.expect[k]) {
+        bad.push(k + ': got ' + JSON.stringify(got[k]) + ', expected ' + JSON.stringify(c.expect[k]));
+      }
+    });
+    if (bad.length) {
+      fails++;
+      out.push('FAIL ' + c.title + '\n     ' + bad.join('\n     '));
+    } else {
+      out.push('PASS ' + c.title);
+    }
+  });
+
+  out.push('');
+  out.push(fails ? fails + ' FAIL' : 'ALL PASS');
+  document.getElementById('out').textContent = out.join('\n');
+})();
+</script>
+</body>
+</html>
