@@ -536,6 +536,7 @@
     cancelBtn.hidden = true;
     formSummary.textContent = 'Add an Offer';
     nameError.hidden = true;
+    resetCaptureBar(); // Add, Cancel edit, Clear all and form reset all end any photo card and its "from photo" flags
     updatePreview();
   }
 
@@ -550,6 +551,7 @@
     var item = items.filter(function (i) { return i.id === id; })[0];
     if (!item) return;
 
+    resetCaptureBar(); // the form is about to show this item's values, so any photo marks no longer apply
     editingId = id;
     nameInput.value = item.name;
     priceInput.value = item.price;
@@ -1097,6 +1099,430 @@
     var removeBtn = e.target.closest('.btn-remove-sm');
     if (removeBtn) {
       removeItem(removeBtn.dataset.id);
+    }
+  });
+
+  // ---------- Photo-assisted entry (Phase 4c) ----------
+  // OCR runs in the browser with Tesseract.js. The library is only downloaded on the first capture.
+  var OCR_SCRIPT_SRC = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+  var OCR_SCRIPT_SRI = 'sha384-GJqSu7vueQ9qN0E9yLPb3Wtpd7OrgK8KmYzC8T1IysG1bcvxvIO4qtYR/D3A991F';
+  var OCR_MAX_SIDE = 1600;      // long side of the photo is shrunk to this before OCR (keeps phones fast)
+  var OCR_SLOW_MS = 12000;      // after this, the status line says the first scan is still downloading the reader
+  var OCR_GIVE_UP_MS = 45000;   // after this, the scan counts as a failure and the worker is stopped
+
+  var captureIdleEl = document.getElementById('capture-idle');
+  var snapBtn = document.getElementById('snap-btn');
+  var uploadBtn = document.getElementById('upload-btn');
+  var snapInput = document.getElementById('snap-input');
+  var uploadInput = document.getElementById('upload-input');
+  var captureStatusEl = document.getElementById('capture-status');
+  var captureThumbEl = document.getElementById('capture-thumb');
+  var captureThumbImg = document.getElementById('capture-thumb-img');
+  var captureScanSweep = document.getElementById('capture-scan-sweep');
+  var captureStatusDot = document.getElementById('capture-status-dot');
+  var captureStatusText = document.getElementById('capture-status-text');
+  var captureStatusSub = document.getElementById('capture-status-sub');
+  var captureCancelBtn = document.getElementById('capture-cancel-btn');
+  var captureRetakeBtn = document.getElementById('capture-retake-btn');
+  var captureRemoveBtn = document.getElementById('capture-remove-btn');
+
+  var ocrScanId = 0;            // bumps on every new scan, cancel and timeout; results from older ids are ignored
+  var ocrScanState = 'idle';    // 'idle' | 'processing' | 'success' | 'failure'
+  var ocrLastMode = 'photo';    // which picker Retake reopens: 'photo' (camera) or 'screenshot' (library/paste)
+  var ocrObjectUrl = null;      // blob URL used for the thumbnail; revoked when the card goes away
+  var ocrSlowTimer = null;
+  var ocrGiveUpTimer = null;
+  var ocrScriptPromise = null;  // cached script load, so the library downloads once
+  var ocrWorkerPromise = null;  // one worker, reused across scans until a cancel or timeout stops it
+  var photoPrevUnit = null;     // unit pill the user had before a photo changed it; "Remove" puts it back
+
+  // Inject the pinned Tesseract.js script once (with SRI). A failed load is retried on the next capture.
+  function loadTesseract() {
+    if (window.Tesseract) return Promise.resolve(window.Tesseract);
+    if (!ocrScriptPromise) {
+      ocrScriptPromise = new Promise(function (resolve, reject) {
+        var script = document.createElement('script');
+        script.src = OCR_SCRIPT_SRC;
+        script.integrity = OCR_SCRIPT_SRI;
+        script.crossOrigin = 'anonymous';
+        script.onload = function () {
+          if (window.Tesseract) {
+            resolve(window.Tesseract);
+          } else {
+            reject(new Error('Tesseract did not register'));
+          }
+        };
+        script.onerror = function () {
+          script.parentNode.removeChild(script); // remove the failed tag so a retry can add a fresh one
+          reject(new Error('Tesseract script failed to load'));
+        };
+        document.head.appendChild(script);
+      });
+      ocrScriptPromise.catch(function () { ocrScriptPromise = null; });
+    }
+    return ocrScriptPromise;
+  }
+
+  // Create the worker on first use (Thai + English), then reuse it for later scans
+  function getOcrWorker() {
+    if (!ocrWorkerPromise) {
+      var workerPromise = loadTesseract().then(function (Tesseract) {
+        return Tesseract.createWorker(['tha', 'eng']);
+      });
+      ocrWorkerPromise = workerPromise;
+      workerPromise.catch(function () {
+        if (ocrWorkerPromise === workerPromise) ocrWorkerPromise = null;
+      });
+    }
+    return ocrWorkerPromise;
+  }
+
+  // Terminate the worker. The next scan will create a new one.
+  function stopOcrWorker() {
+    var workerPromise = ocrWorkerPromise;
+    ocrWorkerPromise = null;
+    if (workerPromise) {
+      workerPromise.then(function (worker) { return worker.terminate(); }).catch(function () {});
+    }
+  }
+
+  function clearOcrTimers() {
+    clearTimeout(ocrSlowTimer);
+    clearTimeout(ocrGiveUpTimer);
+  }
+
+  // Ends the scan in flight, if any, so its late results are ignored. The worker is only stopped
+  // while a scan is running. A finished scan keeps its worker for the next photo.
+  function endOcrScan() {
+    ocrScanId++;
+    clearOcrTimers();
+    if (ocrScanState === 'processing') stopOcrWorker();
+  }
+
+  // Shows the status card in the capture bar's slot. Processing gets Cancel;
+  // success and failure get Retake / Remove.
+  function showCaptureStatus(state, title, sub) {
+    var processing = state === 'processing';
+    ocrScanState = state;
+    captureIdleEl.hidden = true;
+    captureStatusEl.hidden = false;
+    captureStatusEl.className = 'capture-status-card' +
+      (state === 'success' ? ' status-success' : '') +
+      (state === 'failure' ? ' status-fail' : '');
+    captureThumbEl.className = 'capture-thumb' + (processing ? ' is-processing' : '');
+    captureScanSweep.hidden = !processing;
+    captureStatusDot.className = 'status-dot ' +
+      (processing ? 'dot-processing' : state === 'success' ? 'dot-success' : 'dot-fail');
+    captureStatusText.textContent = title;
+    captureStatusSub.textContent = sub;
+    captureCancelBtn.hidden = !processing;
+    captureRetakeBtn.hidden = processing;
+    captureRemoveBtn.hidden = processing;
+  }
+
+  function showFailure() {
+    // Neutral on purpose: an ordinary outcome for a blurry photo, not an error. Never blocks Add.
+    showCaptureStatus('failure', 'Couldn’t read that photo', 'No worries — fill in the details below.');
+  }
+
+  // Back to Idle. Drops the thumbnail and every "from photo" flag. Typed values stay where they are.
+  function showIdle() {
+    clearPhotoFlags();
+    photoPrevUnit = null;
+    if (ocrObjectUrl) {
+      URL.revokeObjectURL(ocrObjectUrl);
+      ocrObjectUrl = null;
+    }
+    captureThumbImg.removeAttribute('src');
+    captureIdleEl.hidden = false;
+    captureStatusEl.hidden = true;
+    ocrScanState = 'idle';
+  }
+
+  // Full reset of the capture bar: stops a scan in flight, then goes back to Idle
+  function resetCaptureBar() {
+    endOcrScan();
+    showIdle();
+  }
+
+  // Decode the photo and draw it onto a canvas whose long side is at most OCR_MAX_SIDE.
+  // Small photos are never enlarged.
+  function photoToCanvas(url) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () {
+        var w = img.naturalWidth;
+        var h = img.naturalHeight;
+        if (!w || !h) {
+          reject(new Error('Photo has no pixels'));
+          return;
+        }
+        var scale = Math.min(1, OCR_MAX_SIDE / Math.max(w, h));
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(w * scale);
+        canvas.height = Math.round(h * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas);
+      };
+      img.onerror = function () { reject(new Error('Could not decode photo')); };
+      img.src = url;
+    });
+  }
+
+  // "Set" means the extractor returned something usable. null, undefined, blank and NaN all count as nothing.
+  function isSet(v) {
+    if (v === null || v === undefined) return false;
+    return String(v).trim() !== '';
+  }
+
+  function hasNumber(v) {
+    return isSet(v) && !isNaN(Number(v));
+  }
+
+  // The form wrapper that holds each photo-fillable field (the unit pills use their own wrapper)
+  function photoWrappers() {
+    return [nameInput, priceInput, shippingInput, unitSizeInput, packCountInput]
+      .map(function (el) { return el.closest('.field'); })
+      .concat([unitMeasureGroup.closest('.unit-compact-wrap')]);
+  }
+
+  function markFromPhoto(wrapper) {
+    if (wrapper.classList.contains('prefilled')) return;
+    wrapper.classList.add('prefilled');
+    var flag = document.createElement('span');
+    flag.className = 'prefilled-flag';
+    flag.textContent = 'from photo';
+    wrapper.querySelector('label').appendChild(flag);
+  }
+
+  function clearPhotoFlag(wrapper) {
+    wrapper.classList.remove('prefilled');
+    var flag;
+    while ((flag = wrapper.querySelector('.prefilled-flag'))) {
+      flag.parentNode.removeChild(flag);
+    }
+  }
+
+  function clearPhotoFlags() {
+    photoWrappers().forEach(function (wrapper) { clearPhotoFlag(wrapper); });
+  }
+
+  // Writes one value into an input the photo filled, flags it, and fires the same
+  // events a user typing would (so Preview and the unit-size warning update).
+  // Returns false if the input did not accept the value, or already held it (nothing changed, so no flag).
+  function fillFromPhoto(input, value) {
+    var before = input.value;
+    input.value = value;
+    if (input.value === '' || input.value === before) return false;
+    markFromPhoto(input.closest('.field'));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+
+  // Selects a unit pill without moving focus or flagging it
+  function selectUnitPillQuietly(value) {
+    Array.prototype.slice.call(unitMeasureGroup.querySelectorAll('.unit-pill')).forEach(function (pill) {
+      var isMatch = pill.dataset.value === value;
+      pill.setAttribute('aria-checked', isMatch ? 'true' : 'false');
+      pill.tabIndex = isMatch ? 0 : -1;
+    });
+  }
+
+  // Selects a unit pill for a photo fill. Runs in the background after a scan, so focus does not move.
+  // Only a real change gets the "from photo" flag, and the pill the user had is remembered for "Remove".
+  function setUnitFromPhoto(value) {
+    var unitWrap = unitMeasureGroup.closest('.unit-compact-wrap');
+    var before = getUnitMeasureValue();
+    if (before === value) return; // already the photo's unit: nothing changed, no flag
+    if (!unitWrap.classList.contains('prefilled')) photoPrevUnit = before;
+    selectUnitPillQuietly(value);
+    markFromPhoto(unitWrap);
+  }
+
+  // "Remove" on the capture card: empties every field the photo filled and the user has not edited yet.
+  // Edited fields lost their flag already, so their values stay. Pack goes back to 1, and a unit pill
+  // the photo changed goes back to the one the user had.
+  function removePhotoFills() {
+    [
+      { input: nameInput, value: '' },
+      { input: priceInput, value: '' },
+      { input: unitSizeInput, value: '' },
+      { input: packCountInput, value: '1' }
+    ].forEach(function (fill) {
+      if (!fill.input.closest('.field').classList.contains('prefilled')) return;
+      fill.input.value = fill.value;
+      // same events a user typing would fire, so Preview and the unit-size warning update
+      fill.input.dispatchEvent(new Event('input', { bubbles: true }));
+      fill.input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    var unitWrap = unitMeasureGroup.closest('.unit-compact-wrap');
+    if (unitWrap.classList.contains('prefilled') && photoPrevUnit) {
+      selectUnitPillQuietly(photoPrevUnit);
+    }
+    updateUnitSizeWarning();
+    updatePreview();
+  }
+
+  // Fill rules: only blank fields get filled, so typed values and the remembered product name are never overwritten
+  function applyExtraction(ex) {
+    var filledCount = 0;
+    var missing = []; // essential fields the photo could not read, used for the partial-success wording
+
+    if (isSet(ex.name)) {
+      if (nameInput.value.trim() === '' && fillFromPhoto(nameInput, String(ex.name).trim())) filledCount++;
+    } else {
+      missing.push('the product name');
+    }
+
+    if (hasNumber(ex.price)) {
+      if (priceInput.value === '' && fillFromPhoto(priceInput, Number(ex.price))) filledCount++;
+    } else {
+      missing.push('the price');
+    }
+
+    // Shipping is never filled from a photo (the design keeps it hand-entered)
+
+    // Size and unit go together. A size with no known unit would be a guess, so neither is filled alone.
+    var hasUnit = isSet(ex.unitOfMeasure) && UNIT_INFO.hasOwnProperty(ex.unitOfMeasure);
+    if (hasNumber(ex.unitSize) && hasUnit) {
+      if (unitSizeInput.value === '' && fillFromPhoto(unitSizeInput, Number(ex.unitSize))) {
+        setUnitFromPhoto(ex.unitOfMeasure);
+        filledCount += 2;
+      }
+    } else {
+      missing.push('the size');
+    }
+
+    // Pack count only fills while it is still the default 1 and is not disabled (fixed bundle)
+    var pack = Math.round(Number(ex.packCount));
+    if (hasNumber(ex.packCount) && pack >= 1 && packCountInput.value === '1' && !packCountInput.disabled &&
+        fillFromPhoto(packCountInput, pack)) {
+      filledCount++;
+    }
+
+    updateUnitSizeWarning();
+    updatePreview();
+
+    if (filledCount === 0) {
+      showFailure();
+      return;
+    }
+    if (missing.length === 0) {
+      showCaptureStatus('success', 'Pre-filled from photo', 'Check the flagged fields below before adding.');
+      return;
+    }
+    var list = missing.length === 1
+      ? missing[0]
+      : missing.slice(0, -1).join(', ') + ' and ' + missing[missing.length - 1];
+    showCaptureStatus('success', 'Filled in what we could read', 'Couldn’t make out ' + list + ' — check the rest below.');
+  }
+
+  // Runs one scan: thumbnail, downscale, OCR, extract, fill. Results from a stale scan id are dropped.
+  function startOcrScan(file, mode) {
+    endOcrScan(); // a new photo replaces any scan still running
+    var scanId = ocrScanId;
+    ocrLastMode = mode;
+
+    if (ocrObjectUrl) URL.revokeObjectURL(ocrObjectUrl);
+    ocrObjectUrl = URL.createObjectURL(file);
+    captureThumbImg.src = ocrObjectUrl;
+    showCaptureStatus('processing', 'Reading photo…', 'This can take a few seconds.');
+
+    ocrSlowTimer = setTimeout(function () {
+      if (scanId === ocrScanId) {
+        captureStatusSub.textContent = 'First scan downloads the text reader — this can take a bit longer';
+      }
+    }, OCR_SLOW_MS);
+
+    ocrGiveUpTimer = setTimeout(function () {
+      if (scanId !== ocrScanId) return;
+      endOcrScan(); // also stops the worker, so the next scan starts clean
+      showFailure();
+    }, OCR_GIVE_UP_MS);
+
+    photoToCanvas(ocrObjectUrl)
+      .then(function (canvas) {
+        return getOcrWorker().then(function (worker) {
+          return worker.recognize(canvas);
+        });
+      })
+      .then(function (result) {
+        if (scanId !== ocrScanId) return;
+        // Tesseract returns words and lines nested inside blocks; the extractor needs only each line's text and height
+        var lines = (result.data.lines || []).map(function (l) {
+          return { text: l.text, h: l.bbox ? l.bbox.y1 - l.bbox.y0 : 0 };
+        });
+        if (!window.OcrExtract) throw new Error('OcrExtract is not loaded');
+        // Promise.resolve covers both a plain return value and a promise from the extractor
+        return Promise.resolve(window.OcrExtract.extract(lines, { mode: mode, currency: appCurrency }))
+          .then(function (extracted) {
+            if (scanId !== ocrScanId) return;
+            clearOcrTimers();
+            applyExtraction(extracted || {});
+          });
+      })
+      .catch(function (err) {
+        if (scanId !== ocrScanId) return;
+        console.warn('Photo read failed:', err);
+        clearOcrTimers();
+        showFailure();
+      });
+  }
+
+  function handlePickedFile(input, mode) {
+    var file = input.files && input.files[0];
+    input.value = ''; // lets the same photo be picked again later
+    if (file) startOcrScan(file, mode);
+  }
+
+  snapBtn.addEventListener('click', function () { snapInput.click(); });
+  uploadBtn.addEventListener('click', function () { uploadInput.click(); });
+  snapInput.addEventListener('change', function () { handlePickedFile(snapInput, 'photo'); });
+  uploadInput.addEventListener('change', function () { handlePickedFile(uploadInput, 'screenshot'); });
+
+  // Paste a screenshot anywhere in the form panel. Text pastes are left alone.
+  formDetails.addEventListener('paste', function (e) {
+    var clipboardItems = e.clipboardData ? e.clipboardData.items : null;
+    if (!clipboardItems) return;
+    for (var i = 0; i < clipboardItems.length; i++) {
+      if (clipboardItems[i].kind === 'file' && clipboardItems[i].type.indexOf('image/') === 0) {
+        var pasted = clipboardItems[i].getAsFile();
+        if (pasted) {
+          e.preventDefault();
+          startOcrScan(pasted, 'screenshot');
+        }
+        return;
+      }
+    }
+  });
+
+  captureCancelBtn.addEventListener('click', resetCaptureBar);
+  captureRemoveBtn.addEventListener('click', function () {
+    removePhotoFills(); // empty the unedited photo fills first, while their "from photo" flags are still there
+    resetCaptureBar();
+  });
+  captureRetakeBtn.addEventListener('click', function () {
+    (ocrLastMode === 'photo' ? snapInput : uploadInput).click();
+  });
+
+  // A "from photo" flag clears as soon as the user edits that field. Our own fills dispatch
+  // untrusted events (isTrusted is false), so they never clear the flags they just set.
+  [nameInput, priceInput, shippingInput, unitSizeInput, packCountInput].forEach(function (input) {
+    input.addEventListener('input', function (e) {
+      if (e.isTrusted) clearPhotoFlag(input.closest('.field'));
+    });
+  });
+  promoSelect.addEventListener('change', function (e) {
+    if (e.isTrusted) clearPhotoFlag(packCountInput.closest('.field'));
+  });
+  unitMeasureGroup.addEventListener('click', function (e) {
+    if (e.isTrusted) clearPhotoFlag(unitMeasureGroup.closest('.unit-compact-wrap'));
+  });
+  unitMeasureGroup.addEventListener('keydown', function (e) {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].indexOf(e.key) !== -1) {
+      clearPhotoFlag(unitMeasureGroup.closest('.unit-compact-wrap'));
     }
   });
 

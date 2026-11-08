@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=4c1">
 </head>
 <body>
 
@@ -42,6 +42,57 @@
     <details id="item-form-details" open>
       <summary id="item-form-summary">Add an Offer</summary>
       <div class="form-panel-body">
+
+        <!-- Photo-assisted entry: capture bar sits above the manual form, never in front of it -->
+        <div id="capture-idle">
+          <div class="capture-bar">
+            <button type="button" class="capture-btn" id="snap-btn">
+              <svg class="capture-btn-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/>
+                <circle cx="12" cy="13" r="3.2"/>
+              </svg>
+              Snap a price tag
+            </button>
+            <button type="button" class="capture-btn" id="upload-btn">
+              <svg class="capture-btn-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8"/>
+                <path d="M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8"/>
+                <path d="M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16"/>
+                <path d="M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/>
+                <line x1="8" y1="10.5" x2="16" y2="10.5"/>
+                <line x1="8" y1="14" x2="13" y2="14"/>
+              </svg>
+              Upload a screenshot
+            </button>
+          </div>
+          <p class="capture-helper">or paste a screenshot &mdash; &#8984;V / Ctrl+V</p>
+        </div>
+
+        <!-- Hidden file pickers: the buttons above call .click() on these -->
+        <input type="file" id="snap-input" accept="image/*" capture="environment" hidden>
+        <input type="file" id="upload-input" accept="image/*" hidden>
+
+        <!-- Status card: replaces the capture buttons while a photo is attached -->
+        <div class="capture-status-card" id="capture-status" aria-live="polite" hidden>
+          <div class="capture-thumb" id="capture-thumb">
+            <img id="capture-thumb-img" alt="">
+            <div class="scan-sweep" id="capture-scan-sweep" hidden></div>
+          </div>
+          <div class="capture-status-text">
+            <div class="capture-status-title"><span class="status-dot" id="capture-status-dot"></span><span id="capture-status-text"></span></div>
+            <div class="capture-status-sub" id="capture-status-sub"></div>
+            <div class="capture-status-actions">
+              <button type="button" class="btn-status-sm" id="capture-cancel-btn" hidden>Cancel</button>
+              <button type="button" class="btn-status-sm" id="capture-retake-btn" hidden>Retake</button>
+              <button type="button" class="btn-status-sm" id="capture-remove-btn" hidden>Remove</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="capture-divider">
+          <span class="capture-divider-label">Manual entry</span>
+        </div>
+
         <form id="item-form" novalidate>
 
           <div class="field">
@@ -156,6 +207,7 @@
   <button type="button" id="toast-undo" class="toast-undo">Undo</button>
 </div>
 
-<script src="js/app.js"></script>
+<script src="js/ocr-extract.js?v=4c1"></script>
+<script src="js/app.js?v=4c1"></script>
 </body>
 </html>
