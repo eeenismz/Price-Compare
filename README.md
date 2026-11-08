@@ -27,6 +27,14 @@ shipping fees, to find the actual cheapest option per unit.
   double-check.
 - A live "Preview" in the form shows the computed price-per-unit as you fill
   it in, before you even submit.
+- Photo entry: snap a shelf price tag, upload a screenshot of a shopping app,
+  or paste one, and the app fills in whatever it can read (product name,
+  price, size, pack count). It never overwrites anything you've typed, marks
+  each filled field "from photo", and leaves a field blank when it isn't
+  sure. Text is read in your own browser with Tesseract.js: no account, no
+  per-scan cost, and the photo never leaves your device. Screenshots read
+  best. On in-store tags it often can't read very large price digits, so
+  expect to type the price yourself.
 - Price and Unit size fields have an (i) info button — click to see what each
   field means without permanently taking up form space.
 - Product name and Unit of measure both remember your last entry, so
@@ -38,7 +46,8 @@ shipping fees, to find the actual cheapest option per unit.
 
 ## Setup
 
-Requires a local PHP server (built and tested against MAMP's PHP 8.2).
+Requires a PHP server (7.4 or newer; production runs 7.4). The only PHP is
+`index.php`, with no database or server-side config.
 
 1. Copy the project folder into your MAMP `htdocs/` directory (or copy just
    `dist/` for a deploy-ready, self-contained version).
@@ -47,12 +56,28 @@ Requires a local PHP server (built and tested against MAMP's PHP 8.2).
    MAMP config).
 3. No build step, no dependencies to install — it's plain HTML/CSS/JS/PHP.
 
+### Deploying
+
+- Upload `dist/`. After changing any CSS or JS, bump the `?v=` stamp on its
+  link in `index.php` (currently `?v=4c2`), or Cloudflare and browsers keep
+  serving the old file for hours.
+- Photo entry loads files from two outside sites, and only on a visitor's
+  first photo: the Tesseract.js script and engine from `cdn.jsdelivr.net`,
+  and the Thai/English language data from `tessdata.projectnaptha.com`. No
+  image data is sent anywhere. If you ever add a Content-Security-Policy,
+  allow both.
+
 ## Project structure
 
 - `index.php`, `css/style.css`, `js/app.js` — the app itself
+- `js/ocr-extract.js` — turns text read from a photo into form fields (pure
+  rules, no network)
 - `dist/` — self-contained, deploy-ready copy of the app (upload this via FTP;
   excludes dev-only files)
-- `tests/` — a dev-only regression test (`mobile-overflow-test.html`), not
-  included in `dist/`
+- `tests/` — dev-only, not included in `dist/`: `mobile-overflow-test.html`,
+  `ocr-extract-test.html` (31 extractor cases; open it and look for
+  "ALL PASS"), and sample images in `ocr-fixtures/`
+- `design-plan-phase4c.md`, `design-preview-phase4c.html` — design reference
+  for photo entry (not deployed)
 - `todo.md` — task tracker (current phase, roadmap)
 - `memory.md` — project decisions/gotchas log
