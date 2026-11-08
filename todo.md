@@ -262,30 +262,34 @@ link, layered on top of the working manual-entry MVP — never a blocker to manu
   renders as literal visible text in the insight banner, not interpreted as
   markup
 
-## In Progress
+### Phase 4c — Photo-assisted entry with free in-browser OCR (2026-11-08)
+Azure AI Vision plan dropped at the user's request (no paid AI APIs). OCR now
+runs entirely in the shopper's browser with Tesseract.js — no server code, no
+API key, no per-scan cost, images never leave the device.
+- Built `js/ocr-extract.js`: pure heuristics turning OCR lines into name /
+  price / size+unit / pack count, null whenever not confident (31 fixture
+  cases in `tests/ocr-extract-test.html`, incl. 2 captured from real
+  Tesseract output and adversarial promo/sale-marker cases from QA)
+- Fixed a real wrong-value bug found by QA: promo lines like
+  "ซื้อ 2 ขวด ลดเพิ่ม 10%" were read as pack count 2; promo lines are now
+  skipped for size/pack
+- Built the capture UI from the confirmed design: Snap a price tag / Upload a
+  screenshot / paste, all 5 states, Tesseract.js v5.1.1 lazy-loaded from
+  jsDelivr (pinned + SRI) only on first use, 45s give-up, Cancel/Retake/Remove
+- Fill is non-destructive: only empty fields, never the product name if one
+  is already there (incl. the remembered name); Remove undoes only the
+  photo fills the user hasn't edited
+- Added `?v=` asset versioning to index.php (stale cached CSS hid the new
+  styles during testing; Cloudflare would do the same for 4h after deploy)
+- Live-tested in Chrome with real Tesseract runs: shelf-tag photo (name +
+  size filled, price not read), Shopee-style screenshot (name + size +
+  unit), typed fields untouched, Remove keeping a typed edit, Cancel mid-scan,
+  manual Add after a photo, 375px with no overflow
+- Known limitation: Tesseract often can't read very large display digits
+  (e.g. a big "59.-" on a shelf tag) and misreads "฿" as "8"/"B", so price
+  is frequently left blank for the user to type
 
-### Phase 4c — Photo-assisted entry + Azure AI Vision OCR proxy (resumed 2026-09-15)
-Two capture modes (shopping-app screenshot vs in-store photo), a server-side
-PHP proxy to Azure AI Vision's Read API (key never in client JS), client-side
-regex/heuristic extraction (not a second LLM call, to avoid an unnamed second
-paid dependency), and a review-UI that reuses the Phase 4a Add-Item form
-directly rather than a parallel code path.
-- product-designer: capture UI + review-flow design complete. Standalone
-  mockup covering all 5 states (Idle, Processing, Success-full,
-  Success-partial, Failure) at `design-preview-phase4c.html`, written plan at
-  `design-plan-phase4c.md` (both project root, uncommitted) — reviewed and
-  confirmed before any production files are touched
-- deep-reasoner: architecture complete for `api/ocr-proxy.php` (request/
-  response contract, abuse guards — size/type caps, per-IP + global daily
-  rate limit, timeout handling), `config.local.php` (new gitignored file for
-  the Azure key, paired with a committed `config.example.php` placeholder),
-  and `js/ocr-extract.js` (pure, DOM-free regex/heuristic extraction with
-  explicit low-confidence-leaves-field-blank rules per field)
-- Blocked purely on the user registering an Azure AI Vision resource and
-  providing its region/endpoint — determines whether the proxy targets the
-  synchronous Image Analysis 4.0 API or the async Computer Vision Read 3.2
-  API (materially different PHP code, see architecture notes). Build
-  (fast-worker + tech-reviewer) resumes as soon as that's available.
+## In Progress
 
 ## Pending
 

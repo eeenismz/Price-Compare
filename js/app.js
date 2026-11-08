@@ -1109,6 +1109,8 @@
   var OCR_MAX_SIDE = 1600;      // long side of the photo is shrunk to this before OCR (keeps phones fast)
   var OCR_SLOW_MS = 12000;      // after this, the status line says the first scan is still downloading the reader
   var OCR_GIVE_UP_MS = 45000;   // after this, the scan counts as a failure and the worker is stopped
+  var OCR_FIRST_GIVE_UP_MS = 90000; // longer limit until one scan has worked: the first one also downloads the reader on mobile data
+  var ocrReaderReady = false;   // true once a scan has finished, so the reader files are already downloaded
 
   var captureIdleEl = document.getElementById('capture-idle');
   var snapBtn = document.getElementById('snap-btn');
@@ -1440,16 +1442,20 @@
       if (scanId !== ocrScanId) return;
       endOcrScan(); // also stops the worker, so the next scan starts clean
       showFailure();
-    }, OCR_GIVE_UP_MS);
+    }, ocrReaderReady ? OCR_GIVE_UP_MS : OCR_FIRST_GIVE_UP_MS);
 
     photoToCanvas(ocrObjectUrl)
       .then(function (canvas) {
+        // Cancelled or replaced while downscaling: stop here so this stale scan
+        // doesn't queue a useless recognize on the next scan's worker
+        if (scanId !== ocrScanId) return null;
         return getOcrWorker().then(function (worker) {
           return worker.recognize(canvas);
         });
       })
       .then(function (result) {
-        if (scanId !== ocrScanId) return;
+        if (scanId !== ocrScanId || !result) return;
+        ocrReaderReady = true;
         // Tesseract returns words and lines nested inside blocks; the extractor needs only each line's text and height
         var lines = (result.data.lines || []).map(function (l) {
           return { text: l.text, h: l.bbox ? l.bbox.y1 - l.bbox.y0 : 0 };
@@ -1486,6 +1492,11 @@
   formDetails.addEventListener('paste', function (e) {
     var clipboardItems = e.clipboardData ? e.clipboardData.items : null;
     if (!clipboardItems) return;
+    // Copying from Excel/Word/some web pages puts text AND an image on the clipboard.
+    // If there's any plain text, treat it as a normal text paste so it isn't lost.
+    for (var t = 0; t < clipboardItems.length; t++) {
+      if (clipboardItems[t].kind === 'string' && clipboardItems[t].type === 'text/plain') return;
+    }
     for (var i = 0; i < clipboardItems.length; i++) {
       if (clipboardItems[i].kind === 'file' && clipboardItems[i].type.indexOf('image/') === 0) {
         var pasted = clipboardItems[i].getAsFile();
