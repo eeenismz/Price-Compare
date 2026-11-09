@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Price Compare - Phase 5 design preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=Nunito+Sans:wght@400;600;700&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+/* ===== Design tokens. A = recommended "Aisle". B, C are alternates (switch in Preview controls). ===== */
+:root, [data-dir="A"] {
+  --canvas:#EEF1F6; --surface:#FFFFFF; --ink:#0F1B2D; --muted:#5B6678; --line:#DCE1EA;
+  --accent:#2447F5; --accent-ink:#FFFFFF; --win:#0B8A55; --win-tint:#DFF4E9; --warn:#9A5200; --warn-tint:#FFF0DA;
+  --f-display:'Bricolage Grotesque','Figtree',system-ui,sans-serif; --f-body:'Figtree',system-ui,sans-serif;
+  --radius:16px;
+}
+[data-dir="B"] {
+  --canvas:#EAF3EC; --surface:#FFFFFF; --ink:#12301F; --muted:#546B5C; --line:#CFE0D3;
+  --accent:#E2452B; --accent-ink:#FFFFFF; --win:#17803F; --win-tint:#D8F1DF; --warn:#8F4B00; --warn-tint:#FFEFD6;
+  --f-display:'Outfit',system-ui,sans-serif; --f-body:'Nunito Sans',system-ui,sans-serif; --radius:22px;
+}
+[data-dir="C"] {
+  --canvas:#FFFFFF; --surface:#FFFFFF; --ink:#111111; --muted:#6A6A6A; --line:#E2E2E2;
+  --accent:#FF5A1F; --accent-ink:#111111; --win:#111111; --win-tint:#FFE9DF; --warn:#8A4300; --warn-tint:#FFF0DA;
+  --f-display:'Archivo',system-ui,sans-serif; --f-body:'Archivo',system-ui,sans-serif; --radius:4px;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}   /* project gotcha: explicit display + hidden */
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.4;
+  padding-bottom:104px;overflow-x:hidden}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+
+/* ===== Preview-only controls ===== */
+.pv{background:#fff;border-bottom:1px solid #ccd;font:13px/1.3 system-ui,sans-serif;color:#223}
+.pv summary{padding:8px 14px;cursor:pointer;font-weight:600}
+.pv-body{padding:4px 14px 12px;display:grid;gap:8px}
+.pv-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.pv-row b{width:100%;font-weight:600;color:#667}
+.pv button{border:1px solid #bbc;background:#f6f7fb;border-radius:8px;padding:6px 10px;font-size:13px}
+.pv button[aria-pressed="true"]{background:#223;color:#fff;border-color:#223}
+
+/* ===== App shell ===== */
+.app{max-width:560px;margin:0 auto;padding:0 14px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 0 6px}
+.brand{white-space:nowrap;font-family:var(--f-display);font-weight:800;font-size:22px;letter-spacing:-.02em;margin:0;min-width:0}
+.brand span{color:var(--accent)}
+[data-dir="C"] .brand{text-transform:uppercase;letter-spacing:0}
+.top-actions{display:flex;gap:8px;align-items:center;position:relative}
+.cur{appearance:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:0 14px;min-height:44px;font-weight:600;
+  font-size:14px;display:inline-flex;align-items:center;gap:6px}
+[data-dir="C"] .cur{border-radius:4px}
+.cur-l{color:var(--muted);font-weight:500}
+.cur select{appearance:none;background:transparent;border:0;font-weight:700;padding:0 2px;min-height:40px;cursor:pointer}
+.cur select option{background:#fff;color:#111}
+.icon-btn{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center}
+[data-dir="C"] .icon-btn{border-radius:4px}
+.menu{position:absolute;right:0;top:50px;background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  box-shadow:0 10px 30px rgba(15,27,45,.15);padding:6px;z-index:30;min-width:170px}
+.menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:12px;min-height:44px;border-radius:8px}
+.menu button:hover{background:var(--canvas)}
+
+/* ===== Results ===== */
+.lede{margin:2px 0 14px;color:var(--muted);font-size:14px}
+.group{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px;min-width:0}
+.g-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+.g-name{font-family:var(--f-display);font-weight:800;font-size:19px;line-height:1.2;margin:0;min-width:0;overflow-wrap:anywhere}
+.g-count{flex:none;font-size:12px;font-weight:600;color:var(--muted);background:var(--canvas);border-radius:999px;padding:4px 10px;white-space:nowrap}
+.insight{margin:0 0 12px;font-size:14px;color:var(--muted)}
+.insight strong{color:var(--ink)}
+.note{margin:0 0 12px;padding:9px 12px;border-radius:10px;background:var(--warn-tint);color:var(--warn);font-size:13px;font-weight:600}
+
+.offer{border-top:1px solid var(--line);padding:12px 0 10px;min-width:0}
+.offer:first-of-type{border-top:0}
+.offer-main{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;width:100%;text-align:left;background:none;border:0;padding:0;align-items:end}
+.offer-main:focus-visible{outline-offset:6px;border-radius:8px}
+.o-label{min-width:0}
+.o-tag{display:inline-block;font-size:12px;font-weight:700;color:var(--accent);margin-bottom:2px;overflow-wrap:anywhere}
+.o-detail{display:block;font-size:14px;color:var(--ink);overflow-wrap:anywhere}
+.o-price{text-align:right;white-space:nowrap}
+.o-price .big{font-family:var(--f-display);font-weight:800;font-size:26px;letter-spacing:-.02em;line-height:1}
+.o-price .per{display:block;font-size:12px;color:var(--muted);font-weight:600;margin-top:2px}
+.bar{grid-column:1/-1;height:6px;background:var(--canvas);border-radius:99px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--line);border-radius:99px;background:#B7C0CF;transition:width .35s ease}
+.o-extra{grid-column:1/-1;font-size:12px;color:var(--muted)}
+
+/* winner = the signature: a notched "shelf tag" */
+.offer.win{background:var(--win-tint);border:0;border-radius:12px;padding:14px;margin:0 -4px 6px;position:relative}
+[data-dir="C"] .offer.win{border:2px solid var(--ink);background:var(--win-tint);border-radius:4px}
+.offer.win::before{content:"";position:absolute;left:-4px;top:50%;width:10px;height:10px;margin-top:-5px;border-radius:50%;background:var(--surface)}
+.offer.win .big{color:var(--win);font-size:34px}
+[data-dir="C"] .offer.win .big{color:var(--ink)}
+.offer.win .bar{background:rgba(255,255,255,.7)}
+.offer.win .bar i{background:var(--win)}
+[data-dir="C"] .offer.win .bar i{background:var(--ink)}
+.badge{display:inline-block;background:var(--win);color:#fff;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;padding:3px 8px;margin-bottom:6px}
+[data-dir="C"] .badge{background:var(--ink)}
+.delta{font-weight:700;color:var(--muted)}
+.acts{display:flex;gap:8px;margin-top:10px}
+.acts button{min-height:44px;padding:0 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-weight:600}
+.acts .danger{color:#B3261E}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);padding:28px 20px;text-align:center}
+.empty h2{font-family:var(--f-display);margin:0 0 6px;font-size:20px}
+.empty p{margin:0;color:var(--muted)}
+
+/* ===== Bottom dock ===== */
+.dock{position:fixed;left:0;right:0;bottom:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+  background:linear-gradient(to top,var(--canvas) 70%,transparent);z-index:10}
+.dock-in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:56px minmax(0,1fr);gap:10px}
+.cam{height:56px;border-radius:var(--radius);border:1px solid var(--line);background:var(--surface);display:grid;place-items:center}
+.add{height:56px;border:0;border-radius:var(--radius);background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:17px;
+  display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 6px 18px rgba(36,71,245,.28)}
+[data-dir="B"] .add{box-shadow:0 6px 18px rgba(226,69,43,.3)}
+[data-dir="C"] .add{box-shadow:none;text-transform:uppercase;letter-spacing:.04em;font-weight:800}
+
+/* ===== Add-offer sheet ===== */
+.scrim{position:fixed;inset:0;background:rgba(15,27,45,.45);z-index:20;opacity:0;transition:opacity .2s}
+.scrim.on{opacity:1}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);border-radius:22px 22px 0 0;max-height:94dvh;
+  display:flex;flex-direction:column;transform:translateY(102%);transition:transform .25s ease;max-width:560px;margin:0 auto}
+[data-dir="C"] .sheet{border-radius:0;border-top:3px solid var(--ink)}
+.sheet.on{transform:none}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px 4px}
+.sheet-head h2{font-family:var(--f-display);font-size:20px;margin:0}
+.sheet-body{overflow-y:auto;padding:6px 16px 12px;display:grid;gap:14px;min-width:0}
+.sheet-foot{padding:10px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line);display:grid;gap:10px;background:var(--surface);
+  border-radius:0 0 0 0}
+.grab{display:none}
+
+.capture{display:flex;gap:8px;flex-wrap:wrap}
+.chip-btn{flex:1 1 140px;min-height:44px;border-radius:12px;border:1px dashed var(--accent);background:transparent;color:var(--accent);font-weight:700;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 12px}
+[data-dir="C"] .chip-btn{color:var(--ink);border-color:var(--ink);border-radius:4px}
+.cap-help{margin:8px 0 0;font-size:12px;color:var(--muted)}
+.scan{display:flex;gap:12px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--canvas)}
+.scan-thumb{width:52px;height:52px;border-radius:8px;flex:none;background:repeating-linear-gradient(45deg,#cfd6e3 0 6px,#e3e8f0 6px 12px);position:relative;overflow:hidden}
+.scan-thumb::after{content:"";position:absolute;left:0;right:0;height:3px;background:var(--accent);animation:sweep 1s linear infinite}
+.scan.done .scan-thumb::after{display:none}
+@keyframes sweep{from{top:0}to{top:100%}}
+.scan-t{min-width:0;font-size:14px}
+.scan-t strong{display:block}
+.scan-t span{color:var(--muted);font-size:13px}
+.scan button{margin-left:auto;border:0;background:none;color:var(--muted);font-weight:600;min-height:44px;padding:0 6px}
+
+label,.lbl{display:block;font-size:13px;font-weight:700;color:var(--muted);margin-bottom:6px}
+.from-photo{display:inline-block;margin-left:6px;background:var(--win-tint);color:var(--win);font-size:11px;padding:1px 7px;border-radius:99px}
+.in{width:100%;min-height:52px;border:1.5px solid var(--line);border-radius:12px;padding:0 14px;background:var(--surface);font-size:18px;min-width:0}
+[data-dir="C"] .in{border-radius:4px;border-color:#111}
+.in:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+.in.price{font-family:var(--f-display);font-weight:800;font-size:26px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.seg{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border:1.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--canvas)}
+[data-dir="C"] .seg{border-radius:4px;border-color:#111}
+.seg button{border:0;background:none;min-height:46px;font-weight:700;font-size:14px;padding:0 2px;border-right:1px solid var(--line);overflow:hidden;text-overflow:ellipsis}
+.seg button:last-child{border-right:0}
+.seg button[aria-checked="true"]{background:var(--ink);color:#fff}
+.seg-name{font-size:12px;color:var(--muted);margin:6px 0 0;min-height:1em}
+.warn{margin:6px 0 0;padding:8px 10px;border-radius:8px;background:var(--warn-tint);color:var(--warn);font-size:13px;font-weight:600}
+
+.more-btn{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:48px;border:0;background:var(--canvas);border-radius:12px;padding:0 14px;font-weight:700}
+[data-dir="C"] .more-btn{border-radius:4px;border:1px solid var(--line)}
+.more-btn span{min-width:0;text-align:left}
+.more-btn small{display:block;font-weight:600;color:var(--muted);font-size:12px}
+.more-btn .chev{transition:transform .2s}
+.more-btn[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.more{display:grid;gap:14px;padding:2px 0 0}
+.step{display:grid;grid-template-columns:48px minmax(0,1fr) 48px;gap:8px}
+.step button{min-height:52px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:22px;font-weight:700}
+.step .in{text-align:center}
+.hint{font-size:12px;color:var(--muted);margin:5px 0 0}
+select.in{appearance:auto;font-size:16px}
+select.in option{background:#fff;color:#111}
+
+.preview{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.preview .l{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.preview .v{font-family:var(--f-display);font-weight:800;font-size:24px;text-align:right;overflow-wrap:anywhere}
+.preview .v small{font-size:13px;color:var(--muted);font-weight:600}
+.submit{min-height:56px;border:0;border-radius:var(--radius);background:var(--accent);color:var(--accent-ink);font-weight:800;font-size:17px;width:100%}
+[data-dir="C"] .submit{text-transform:uppercase;letter-spacing:.04em}
+.submit:disabled{background:var(--line);color:var(--muted);cursor:not-allowed}
+.err{color:#B3261E;font-size:13px;font-weight:600;margin:6px 0 0}
+
+.toast{position:fixed;left:14px;right:14px;bottom:88px;max-width:532px;margin:0 auto;background:var(--ink);color:#fff;border-radius:12px;
+  padding:6px 8px 6px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;z-index:40}
+[data-dir="C"] .toast{background:#111}
+.toast button{min-height:44px;border:0;background:none;color:#9DB4FF;font-weight:800;padding:0 12px}
+[data-dir="C"] .toast button{color:var(--accent)}
+
+/* ===== Wide screens: add panel becomes a persistent side column, no dock ===== */
+@media (min-width:900px){
+  .app{max-width:980px;display:grid;grid-template-columns:minmax(0,1fr) 380px;column-gap:28px;align-items:start}
+  .top,.lede{grid-column:1/-1}
+  .res{grid-column:1}
+  .dock,.scrim{display:none}
+  .sheet{position:sticky;top:16px;grid-column:2;grid-row:3/5;transform:none;border:1px solid var(--line);border-radius:var(--radius);max-height:calc(100dvh - 32px);max-width:none;margin:0;z-index:1}
+  .sheet-head .close{display:none}
+  body{padding-bottom:32px}
+  .toast{bottom:24px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body data-dir="A" id="root">
+
+<details class="pv">
+  <summary>Preview controls (design review only, not part of the app)</summary>
+  <div class="pv-body">
+    <div class="pv-row"><b>Visual direction</b>
+      <button type="button" data-dirbtn="A" aria-pressed="true">A Aisle (recommended)</button>
+      <button type="button" data-dirbtn="B" aria-pressed="false">B Fresh Market</button>
+      <button type="button" data-dirbtn="C" aria-pressed="false">C Swiss Receipt</button>
+    </div>
+    <div class="pv-row"><b>Add-offer sheet</b>
+      <button type="button" data-sheet="closed" aria-pressed="true">Closed</button>
+      <button type="button" data-sheet="default" aria-pressed="false">Default</button>
+      <button type="button" data-sheet="expanded" aria-pressed="false">Expanded (promo + shipping)</button>
+      <button type="button" data-sheet="photo" aria-pressed="false">Photo scan</button>
+    </div>
+    <div class="pv-row"><b>Data</b>
+      <button type="button" data-data="filled" aria-pressed="true">Sample offers</button>
+      <button type="button" data-data="empty" aria-pressed="false">Empty</button>
+      <button type="button" data-data="stress" aria-pressed="false">Long-text stress test</button>
+    </div>
+  </div>
+</details>
+
+<div class="app" id="app">
+  <header class="top">
+    <h1 class="brand">Price<span>.</span>Compare</h1>
+    <div class="top-actions">
+      <label class="cur" for="cur"><span class="cur-l">in</span>
+        <select id="cur" aria-label="Currency to compare items in"><option>THB</option><option>MYR</option><option>SGD</option><option>USD</option><option>PHP</option><option>VND</option><option>IDR</option></select>
+      </label>
+      <button type="button" class="icon-btn" id="menu-btn" aria-haspopup="true" aria-expanded="false" aria-label="More actions">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+      </button>
+      <div class="menu" id="menu" hidden><button type="button" id="clear-all">Clear all offers</button></div>
+    </div>
+  </header>
+  <p class="lede" id="lede">Cheapest per unit comes first. Tap an offer for edit and remove.</p>
+
+  <main class="res" id="res" aria-live="polite"></main>
+
+  <!-- Add-offer sheet: bottom sheet on phones, side panel on wide screens -->
+  <section class="sheet" id="sheet" role="dialog" aria-labelledby="sheet-title" aria-modal="false">
+    <div class="sheet-head">
+      <h2 id="sheet-title">Add an offer</h2>
+      <button type="button" class="icon-btn close" id="sheet-close" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <form id="form" class="sheet-body" novalidate>
+      <div id="cap-idle">
+        <div class="capture">
+          <button type="button" class="chip-btn" id="snap">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.2"/></svg>
+            Scan price tag</button>
+          <button type="button" class="chip-btn" id="shot">Use a screenshot</button>
+        </div>
+        <p class="cap-help">Or paste an image. We fill what we can read; you check it.</p>
+      </div>
+      <div class="scan" id="scan" hidden>
+        <div class="scan-thumb"></div>
+        <div class="scan-t"><strong id="scan-t">Reading tag...</strong><span id="scan-s">In your browser. The photo never leaves your phone.</span></div>
+        <button type="button" id="scan-x">Remove</button>
+      </div>
+
+      <div>
+        <label for="f-name">Product <span class="from-photo" id="fp-name" hidden>from photo</span></label>
+        <input class="in" id="f-name" list="names" autocomplete="off" enterkeyhint="next" value="Breeze Liquid Detergent">
+        <datalist id="names"></datalist>
+        <p class="err" id="e-name" hidden>Add a product name</p>
+      </div>
+
+      <div class="two">
+        <div>
+          <label for="f-price">Price <span class="from-photo" id="fp-price" hidden>from photo</span></label>
+          <input class="in price num" id="f-price" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" enterkeyhint="next">
+          <p class="err" id="e-price" hidden>Add the price</p>
+        </div>
+        <div>
+          <label for="f-size">Size <span class="from-photo" id="fp-size" hidden>from photo</span></label>
+          <input class="in price num" id="f-size" type="number" inputmode="decimal" step="any" min="0" placeholder="850" enterkeyhint="done">
+          <p class="err" id="e-size" hidden>Add the size</p>
+        </div>
+      </div>
+
+      <div>
+        <span class="lbl" id="unit-l">Unit</span>
+        <div class="seg" id="seg" role="radiogroup" aria-labelledby="unit-l">
+          <button type="button" role="radio" data-v="ml" aria-checked="true" aria-label="Milliliters">ml</button>
+          <button type="button" role="radio" data-v="l" aria-checked="false" aria-label="Liters">L</button>
+          <button type="button" role="radio" data-v="g" aria-checked="false" aria-label="Grams">g</button>
+          <button type="button" role="radio" data-v="kg" aria-checked="false" aria-label="Kilograms">kg</button>
+          <button type="button" role="radio" data-v="piece" aria-checked="false" aria-label="Piece">pc</button>
+          <button type="button" role="radio" data-v="sheet" aria-checked="false" aria-label="Sheet">sheet</button>
+        </div>
+        <p class="seg-name" id="seg-name">Milliliters</p>
+        <p class="warn" id="size-warn" hidden></p>
+      </div>
+
+      <div>
+        <button type="button" class="more-btn" id="more-btn" aria-expanded="false" aria-controls="more">
+          <span>Pack, shipping, promotion <small id="more-sum">none set</small></span>
+          <svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="more" id="more" hidden>
+          <div style="margin-top:14px">
+            <span class="lbl" id="pack-l">Pack count</span>
+            <div class="step" role="group" aria-labelledby="pack-l">
+              <button type="button" id="pack-minus" aria-label="Fewer">&minus;</button>
+              <input class="in num" id="f-pack" type="number" inputmode="numeric" min="1" step="1" value="1" aria-labelledby="pack-l">
+              <button type="button" id="pack-plus" aria-label="More">+</button>
+            </div>
+            <p class="hint">How many of that size the price covers. 3 for three 850ml pouches.</p>
+          </div>
+          <div>
+            <label for="f-ship">Shipping <span style="font-weight:500">(optional)</span></label>
+            <input class="in num" id="f-ship" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0">
+          </div>
+          <div>
+            <label for="f-promo">Promotion</label>
+            <select class="in" id="f-promo">
+              <option value="none">No promotion</option>
+              <option value="bogo">Buy 1 Get 1 Free</option>
+              <option value="second50">Second item 50% off</option>
+              <option value="buy3pay2">Buy 3 Pay for 2</option>
+              <option value="fixedBundle">Fixed bundle price</option>
+              <option value="secondFixed">Second item at a fixed price</option>
+            </select>
+            <p class="hint">Price above is the sticker price for one purchase. We work out the real cost per unit.</p>
+          </div>
+          <div class="two" id="bundle" hidden>
+            <div><label for="f-bn">Bundle pack count (N)</label><input class="in num" id="f-bn" type="number" inputmode="numeric" min="1"></div>
+            <div><label for="f-bx">Total bundle price (X)</label><input class="in num" id="f-bx" type="number" inputmode="decimal" min="0"></div>
+          </div>
+          <div id="second" hidden>
+            <label for="f-sy">Second item&rsquo;s price (Y)</label><input class="in num" id="f-sy" type="number" inputmode="decimal" min="0">
+          </div>
+        </div>
+      </div>
+    </form>
+    <div class="sheet-foot">
+      <div class="preview" aria-live="polite"><span class="l">Preview</span><span class="v num" id="pv-v">&mdash; <small id="pv-u">/ L</small></span></div>
+      <button type="submit" class="submit" id="submit" form="form">Add offer</button>
+    </div>
+  </section>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="dock" id="dock"><div class="dock-in">
+  <button type="button" class="cam" id="dock-cam" aria-label="Scan a price tag">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.2"/></svg>
+  </button>
+  <button type="button" class="add" id="dock-add"><span aria-hidden="true" style="font-size:24px;line-height:1">+</span> Add offer</button>
+</div></div>
+<div class="toast" id="toast" hidden><span id="toast-m"></span><button type="button" id="toast-u">Undo</button></div>
+
+<script>
+(function () {
+  'use strict';
+  // ---- sample data (preview only; the real app keeps its own compute()) ----
+  var NAMES = {
+    A: 'Breeze Liquid Detergent',
+    B: 'Premium Hom Mali Jasmine Rice 100% Pathum Thani Grade A'
+  };
+  var UNITS = { ml:{f:'vol',m:1,disp:'L',div:1000}, l:{f:'vol',m:1000,disp:'L',div:1000}, g:{f:'mass',m:1,disp:'kg',div:1000},
+    kg:{f:'mass',m:1000,disp:'kg',div:1000}, piece:{f:'count',m:1,disp:'piece',div:1}, sheet:{f:'sheet',m:1,disp:'sheet',div:1} };
+  var PROMO = { none:{c:1,u:1}, bogo:{c:1,u:2}, second50:{c:1.5,u:2}, buy3pay2:{c:2,u:3} };
+  var seq = 10;
+  var items, cur = 'THB', lastName = NAMES.A, lastUnit = 'ml', removed = null, toastTimer;
+
+  function seed(kind) {
+    if (kind === 'empty') return [];
+    var base = [
+      {id:1,name:NAMES.A,price:189,size:850,unit:'ml',pack:3,ship:0,promo:{type:'none'}},
+      {id:2,name:NAMES.A,price:169,size:2200,unit:'ml',pack:1,ship:0,promo:{type:'none'}},
+      {id:3,name:NAMES.A,price:219,size:2200,unit:'ml',pack:1,ship:40,promo:{type:'bogo'}},
+      {id:4,name:NAMES.B,price:189,size:5,unit:'kg',pack:1,ship:0,promo:{type:'none'}},
+      {id:5,name:NAMES.B,price:82,size:2,unit:'kg',pack:1,ship:0,promo:{type:'none'}}
+    ];
+    if (kind === 'stress') {
+      base.push({id:6,name:NAMES.B,price:2999.5,size:12345.5,unit:'kg',pack:12,ship:1250,promo:{type:'fixedBundle',n:3,x:2799}});
+    }
+    return base;
+  }
+
+  // price per display unit (L / kg / piece / sheet), mirrors the real app's idea: (price*costMult + shipping) / base units
+  function calc(it) {
+    var u = UNITS[it.unit], p = it.promo || {type:'none'}, cost, units;
+    if (p.type === 'fixedBundle') { cost = p.x; units = p.n * it.size * u.m; }
+    else if (p.type === 'secondFixed') { cost = it.price + p.y; units = 2 * it.pack * it.size * u.m; }
+    else { var pr = PROMO[p.type] || PROMO.none; cost = it.price * pr.c; units = it.pack * it.size * u.m * pr.u; }
+    cost += it.ship || 0;
+    return { per: cost / (units / u.div), fam: u.f, disp: u.disp };
+  }
+  function money(n) { return cur === 'THB' ? '฿' + n.toFixed(2) : cur + ' ' + n.toFixed(2); }
+  function label(it) {
+    var p = it.promo.type;
+    if (p === 'bogo') return 'Buy 1 Get 1 Free';
+    if (p === 'second50') return '2nd item 50% off';
+    if (p === 'buy3pay2') return 'Buy 3, pay for 2';
+    if (p === 'fixedBundle') return it.promo.n + ' for ' + money(it.promo.x);
+    if (p === 'secondFixed') return '2nd item at ' + money(it.promo.y);
+    if (it.ship > 0) return '+ shipping';
+    if (it.pack > 1) return 'Qty ' + it.pack;
+    return '';
+  }
+  function detail(it) {
+    var s = it.pack > 1 ? it.price.toFixed(2) + ' for ' + it.pack + ' × ' + it.size + ' ' + it.unit : it.price.toFixed(2) + ' for ' + it.size + ' ' + it.unit;
+    if (it.ship > 0) s += ' (incl. ' + it.ship.toFixed(0) + ' shipping)';
+    return s;
+  }
+
+  // ---- render results ----
+  var res = document.getElementById('res'), open = null;
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function render() {
+    var order = [], by = {};
+    items.forEach(function (it) { if (!by[it.name]) { by[it.name] = []; order.push(it.name); } by[it.name].push(it); });
+    document.getElementById('names').innerHTML = order.map(function (n) { return '<option value="' + esc(n) + '">'; }).join('');
+    document.getElementById('lede').hidden = !items.length;
+    document.getElementById('menu-btn').hidden = !items.length;
+    if (!items.length) {
+      res.innerHTML = '<div class="empty"><h2>Nothing to compare yet</h2><p>Tap <b>Add offer</b>, or scan a price tag. Add two offers of the same product to see which is cheaper per unit.</p></div>';
+      return;
+    }
+    res.innerHTML = order.map(function (name) {
+      var rows = by[name].map(function (it) { return { it: it, c: calc(it) }; }).sort(function (a, b) { return a.c.per - b.c.per; });
+      var fams = {}; rows.forEach(function (r) { fams[r.c.fam] = 1; });
+      var mixed = Object.keys(fams).length > 1, n = rows.length, disp = rows[0].c.disp;
+      var worst = rows[n - 1].c.per, best = rows[0].c.per, html = '';
+      html += '<section class="group"><div class="g-head"><h2 class="g-name">' + esc(name) + '</h2><span class="g-count">' + n + (n === 1 ? ' offer' : ' offers') + '</span></div>';
+      if (mixed) html += '<p class="note">Comparing across incompatible units, so no direct Best Value.</p>';
+      else if (n > 1) html += '<p class="insight">The priciest option costs <strong>' + money(worst - best) + ' more per ' + disp + '</strong>.</p>';
+      else html += '<p class="insight">Add another offer of this product to compare.</p>';
+      rows.forEach(function (r, i) {
+        var it = r.it, win = i === 0 && n > 1 && !mixed, w = mixed ? 100 : Math.max(6, Math.round(r.c.per / worst * 100));
+        var tag = label(it), extra = (!win && n > 1 && !mixed && i > 0) ? '<span class="delta">+' + money(r.c.per - best) + '</span> vs best' : '';
+        html += '<div class="offer' + (win ? ' win' : '') + '">' +
+          '<button type="button" class="offer-main" data-id="' + it.id + '" aria-expanded="' + (open === it.id) + '">' +
+          '<span class="o-label">' + (win ? '<span class="badge">Best value</span><br>' : '') + (tag ? '<span class="o-tag">' + esc(tag) + '</span>' : '') +
+          '<span class="o-detail">' + esc(detail(it)) + '</span></span>' +
+          '<span class="o-price"><span class="big num">' + money(r.c.per) + '</span><span class="per">per ' + r.c.disp + '</span></span>' +
+          (n > 1 && !mixed ? '<span class="bar" aria-hidden="true"><i style="width:' + w + '%"></i></span>' : '') +
+          (extra ? '<span class="o-extra">' + extra + '</span>' : '') + '</button>' +
+          (open === it.id ? '<div class="acts"><button type="button" data-edit="' + it.id + '">Edit</button><button type="button" class="danger" data-del="' + it.id + '">Remove</button></div>' : '') +
+          '</div>';
+      });
+      return html + '</section>';
+    }).join('');
+  }
+  res.addEventListener('click', function (e) {
+    var m = e.target.closest('.offer-main'), d = e.target.closest('[data-del]'), ed = e.target.closest('[data-edit]');
+    if (d) { var id = +d.dataset.del, ix = items.findIndex(function (x) { return x.id === id; }); removed = { it: items[ix], ix: ix }; items.splice(ix, 1); open = null; render(); toast('Offer removed'); }
+    else if (ed) { var it = items.find(function (x) { return x.id === +ed.dataset.edit; }); fillForm(it); setSheet('default'); }
+    else if (m) { var i2 = +m.dataset.id; open = open === i2 ? null : i2; render(); var b = res.querySelector('[data-id="' + i2 + '"]'); if (b) b.focus(); }
+  });
+
+  // ---- toast ----
+  var toastEl = document.getElementById('toast');
+  function toast(msg) { document.getElementById('toast-m').textContent = msg; toastEl.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { toastEl.hidden = true; }, 5000); }
+  document.getElementById('toast-u').onclick = function () { if (removed) { items.splice(removed.ix, 0, removed.it); removed = null; toastEl.hidden = true; render(); } };
+
+  // ---- sheet & disclosure ----
+  var sheet = document.getElementById('sheet'), scrim = document.getElementById('scrim'), dock = document.getElementById('dock');
+  var wide = window.matchMedia('(min-width:900px)');
+  function setSheet(mode) {
+    var on = mode !== 'closed';
+    sheet.classList.toggle('on', on); scrim.hidden = !on || wide.matches; scrim.classList.toggle('on', on);
+    dock.hidden = on && !wide.matches;
+    sheet.setAttribute('aria-hidden', String(!on && !wide.matches));
+    sheet.inert = !on && !wide.matches;
+    setMore(mode === 'expanded');
+    if (mode === 'expanded') { document.getElementById('f-ship').value = 40; document.getElementById('f-promo').value = 'bogo'; document.getElementById('f-price').value = document.getElementById('f-price').value || 219; document.getElementById('f-size').value = document.getElementById('f-size').value || 2200; syncMore(); }
+    if (mode === 'photo') startScan();
+    pvMark('data-sheet', mode);
+    updatePreview();
+  }
+  function setMore(on) { document.getElementById('more').hidden = !on; document.getElementById('more-btn').setAttribute('aria-expanded', String(on)); }
+  document.getElementById('more-btn').onclick = function () { setMore(this.getAttribute('aria-expanded') !== 'true'); };
+  document.getElementById('dock-add').onclick = function () { setSheet('default'); setTimeout(function () { document.getElementById('f-price').focus(); }, 260); };
+  document.getElementById('dock-cam').onclick = function () { setSheet('photo'); };
+  document.getElementById('sheet-close').onclick = function () { setSheet('closed'); };
+  scrim.onclick = function () { setSheet('closed'); };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { setSheet('closed'); menu.hidden = true; } });
+  wide.addEventListener('change', function () { setSheet(sheet.classList.contains('on') ? 'default' : 'closed'); });
+
+  // ---- menu ----
+  var menu = document.getElementById('menu'), mb = document.getElementById('menu-btn');
+  mb.onclick = function () { menu.hidden = !menu.hidden; mb.setAttribute('aria-expanded', String(!menu.hidden)); };
+  document.getElementById('clear-all').onclick = function () { removed = null; var all = items; items = []; menu.hidden = true; render(); toastEl.hidden = false; document.getElementById('toast-m').textContent = 'All offers cleared'; document.getElementById('toast-u').onclick = function () { items = all; toastEl.hidden = true; render(); }; clearTimeout(toastTimer); toastTimer = setTimeout(function () { toastEl.hidden = true; }, 5000); };
+
+  // ---- form ----
+  var F = { name: gid('f-name'), price: gid('f-price'), size: gid('f-size'), pack: gid('f-pack'), ship: gid('f-ship'), promo: gid('f-promo'),
+    bn: gid('f-bn'), bx: gid('f-bx'), sy: gid('f-sy') };
+  function gid(i) { return document.getElementById(i); }
+  var unit = 'ml', editId = null;
+  var seg = gid('seg'), NAMES_U = {ml:'Milliliters',l:'Liters',g:'Grams',kg:'Kilograms',piece:'Piece',sheet:'Sheet'};
+  function setUnit(v) {
+    unit = v; seg.querySelectorAll('button').forEach(function (b) { var on = b.dataset.v === v; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
+    gid('seg-name').textContent = NAMES_U[v]; updatePreview();
+  }
+  seg.addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) setUnit(b.dataset.v); });
+  seg.addEventListener('keydown', function (e) {
+    var k = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key]; if (!k) return; e.preventDefault();
+    var arr = Array.prototype.slice.call(seg.querySelectorAll('button')), i = arr.findIndex(function (b) { return b.dataset.v === unit; });
+    var nb = arr[(i + k + arr.length) % arr.length]; setUnit(nb.dataset.v); nb.focus();
+  });
+  gid('pack-minus').onclick = function () { F.pack.value = Math.max(1, (+F.pack.value || 1) - 1); syncMore(); updatePreview(); };
+  gid('pack-plus').onclick = function () { F.pack.value = (+F.pack.value || 1) + 1; syncMore(); updatePreview(); };
+  F.promo.onchange = function () { gid('bundle').hidden = F.promo.value !== 'fixedBundle'; gid('second').hidden = F.promo.value !== 'secondFixed'; syncMore(); updatePreview(); };
+  function syncMore() {
+    var n = 0, parts = [];
+    if ((+F.pack.value || 1) > 1) { n++; parts.push('pack ' + F.pack.value); }
+    if (+F.ship.value > 0) { n++; parts.push('shipping'); }
+    if (F.promo.value !== 'none') { n++; parts.push('promo'); }
+    gid('more-sum').textContent = n ? parts.join(', ') : 'none set';
+    gid('bundle').hidden = F.promo.value !== 'fixedBundle'; gid('second').hidden = F.promo.value !== 'secondFixed';
+  }
+  var LIMITS = { l: 30, ml: 5000, kg: 50, g: 10000 };
+  function readForm() {
+    var p = F.promo.value, promo = { type: p };
+    if (p === 'fixedBundle') { promo.n = +F.bn.value; promo.x = +F.bx.value; }
+    if (p === 'secondFixed') promo.y = +F.sy.value;
+    return { price: +F.price.value, size: +F.size.value, unit: unit, pack: Math.max(1, +F.pack.value || 1), ship: +F.ship.value || 0, promo: promo };
+  }
+  function updatePreview() {
+    var v = readForm(), ok = v.size > 0 && (v.price > 0 || (v.promo.type === 'fixedBundle' && v.promo.x > 0));
+    if (v.promo.type === 'fixedBundle' && !(v.promo.n > 0 && v.promo.x > 0)) ok = false;
+    if (v.promo.type === 'secondFixed' && !(v.promo.y >= 0 && F.sy.value !== '')) ok = false;
+    var c = UNITS[unit], w = gid('size-warn');
+    if (LIMITS[unit] && v.size > LIMITS[unit]) { w.hidden = false; w.textContent = 'Unusually large for ' + NAMES_U[unit] + '. Did you mean ' + (unit === 'l' ? 'Milliliters' : unit === 'kg' ? 'Grams' : unit === 'ml' ? 'Liters' : 'Kilograms') + '?'; } else w.hidden = true;
+    if (ok) { var r = calc(v); gid('pv-v').innerHTML = money(r.per) + ' <small>/ ' + r.disp + '</small>'; }
+    else gid('pv-v').innerHTML = '&mdash; <small>/ ' + c.disp + '</small>';
+  }
+  ['f-price', 'f-size', 'f-ship', 'f-bn', 'f-bx', 'f-sy', 'f-pack'].forEach(function (i) { gid(i).addEventListener('input', function (e) {
+    updatePreview(); syncMore(); if (e.isTrusted) { var m = { 'f-price': 'fp-price', 'f-size': 'fp-size' }[i]; if (m) gid(m).hidden = true; } }); });
+  F.name.addEventListener('input', function (e) { if (e.isTrusted) gid('fp-name').hidden = true; });
+  // Enter on a field moves on (phone keypad "next"); Enter on the last field submits
+  [F.name, F.price].forEach(function (el, i) { el.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); [F.price, F.size][i].focus(); } }); });
+
+  function fillForm(it) {
+    editId = it.id; F.name.value = it.name; F.price.value = it.price; F.size.value = it.size; F.pack.value = it.pack; F.ship.value = it.ship || '';
+    F.promo.value = it.promo.type; F.bn.value = it.promo.n || ''; F.bx.value = it.promo.x || ''; F.sy.value = it.promo.y != null ? it.promo.y : '';
+    setUnit(it.unit); syncMore(); gid('sheet-title').textContent = 'Edit offer'; gid('submit').textContent = 'Save changes';
+  }
+  function resetForm() {
+    editId = null; F.price.value = ''; F.size.value = ''; F.pack.value = 1; F.ship.value = ''; F.promo.value = 'none'; F.bn.value = F.bx.value = F.sy.value = '';
+    F.name.value = lastName; setUnit(lastUnit); syncMore(); setMore(false); clearScan();
+    gid('sheet-title').textContent = 'Add an offer'; gid('submit').textContent = 'Add offer';
+    ['e-name', 'e-price', 'e-size'].forEach(function (i) { gid(i).hidden = true; });
+  }
+  gid('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var v = readForm(), name = F.name.value.trim(), bad = false;
+    gid('e-name').hidden = !!name; if (!name) bad = true;
+    var needPrice = v.promo.type !== 'fixedBundle';
+    gid('e-price').hidden = !(needPrice && !(v.price > 0)); if (needPrice && !(v.price > 0)) bad = true;
+    gid('e-size').hidden = v.size > 0; if (!(v.size > 0)) bad = true;
+    if (bad) { var first = gid('form').querySelector('.err:not([hidden])'); if (first) first.previousElementSibling.focus(); return; }
+    v.name = name;
+    if (editId) { var t = items.find(function (x) { return x.id === editId; }); Object.assign(t, v); }
+    else { v.id = ++seq; items.push(v); }
+    lastName = name; lastUnit = unit; open = null; render(); resetForm(); setSheet('closed');
+    toast(editId ? 'Changes saved' : 'Offer added');
+  });
+  // submit button lives outside the form element in the DOM, tied with form="form"
+
+  // ---- photo entry (simulated; real app runs Tesseract.js) ----
+  var scan = gid('scan'), scanTimer;
+  function startScan() {
+    gid('cap-idle').hidden = true; scan.hidden = false; scan.classList.remove('done'); gid('scan-t').textContent = 'Reading tag...';
+    clearTimeout(scanTimer);
+    scanTimer = setTimeout(function () {
+      scan.classList.add('done'); gid('scan-t').textContent = 'Filled what we could read';
+      gid('scan-s').textContent = 'Price was too large to read. Type it, then check the rest.';
+      F.size.value = 900; setUnit('ml'); gid('fp-size').hidden = false;
+      if (!F.name.value.trim()) { F.name.value = 'Breeze Liquid Detergent'; gid('fp-name').hidden = false; }
+      F.price.focus(); updatePreview();
+    }, 1200);
+  }
+  function clearScan() { clearTimeout(scanTimer); scan.hidden = true; gid('cap-idle').hidden = false; ['fp-name', 'fp-price', 'fp-size'].forEach(function (i) { gid(i).hidden = true; }); }
+  gid('snap').onclick = startScan; gid('shot').onclick = startScan;
+  gid('scan-x').onclick = function () { clearScan(); F.size.value = ''; updatePreview(); };
+
+  // ---- preview switchers ----
+  function pvMark(attr, val) { document.querySelectorAll('[' + attr + ']').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute(attr) === val)); }); }
+  document.querySelectorAll('[data-dirbtn]').forEach(function (b) { b.onclick = function () { gid('root').setAttribute('data-dir', b.dataset.dirbtn); pvMark('data-dirbtn', b.dataset.dirbtn); }; });
+  document.querySelectorAll('[data-sheet]').forEach(function (b) { b.onclick = function () { resetForm(); setSheet(b.dataset.sheet); }; });
+  document.querySelectorAll('[data-data]').forEach(function (b) { b.onclick = function () { items = seed(b.dataset.data); open = null; render(); pvMark('data-data', b.dataset.data); }; });
+
+  items = seed('filled'); resetForm(); render(); setSheet('closed');
+})();
+</script>
+</body>
+</html>

@@ -292,6 +292,11 @@ API key, no per-scan cost, images never leave the device.
 
 ## In Progress
 
+### Phase 5 — Visual + UX redesign (light, pro, faster in-store)
+- [x] M1: Design direction — UX audit, 3 visual directions, simplified flow, standalone preview (design-plan-phase5.md, design-preview-phase5.html). User picked A "Aisle" (light only), approved all 6 proposed removals; short unit labels kept as designed; no "remember last size/unit" placeholder and no Share action (not requested)
+- [ ] M2: Build the redesign into index.php / css / UI layer of js (math untouched)
+- [ ] M3: QA (375px + desktop, live), polish, sync dist/
+
 ## Pending
 
 ## Pending (not yet scheduled — out of scope for this pass per spec)
