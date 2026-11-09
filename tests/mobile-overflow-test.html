@@ -66,7 +66,8 @@
     set('item-name', 'Ultra Premium Organic Extra Virgin Cold-Pressed Olive Oil Value Multipack');
     set('item-price', '1'); // ignored by fixedBundle math, still required
     set('item-unit-size', '750');
-    set('item-unit-measure', 'ml');
+    // Unit is a pill group now (Phase 5): click the ml pill
+    doc.querySelector('#item-unit-measure [data-value="ml"]').click();
     doc.getElementById('item-promo').value = 'fixedBundle';
     doc.getElementById('item-promo').dispatchEvent(new win.Event('change', { bubbles: true }));
     set('bundle-n', '6');

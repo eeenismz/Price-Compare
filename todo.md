@@ -294,7 +294,7 @@ API key, no per-scan cost, images never leave the device.
 
 ### Phase 5 — Visual + UX redesign (light, pro, faster in-store)
 - [x] M1: Design direction — UX audit, 3 visual directions, simplified flow, standalone preview (design-plan-phase5.md, design-preview-phase5.html). User picked A "Aisle" (light only), approved all 6 proposed removals; short unit labels kept as designed; no "remember last size/unit" placeholder and no Share action (not requested)
-- [ ] M2: Build the redesign into index.php / css / UI layer of js (math untouched)
+- [x] M2: Built Aisle into index.php / css/style.css / UI layer of js/app.js (math untouched, prices identical on 16 test offers, OCR + overflow tests pass). Also fixed: Clear all → Undo left results blank. Mixed-unit products now show only the incompatible-units note; "vs best" is a currency amount per unit, not %
 - [ ] M3: QA (375px + desktop, live), polish, sync dist/
 
 ## Pending
