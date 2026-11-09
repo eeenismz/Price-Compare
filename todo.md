@@ -290,12 +290,13 @@ API key, no per-scan cost, images never leave the device.
   (e.g. a big "59.-" on a shelf tag) and misreads "฿" as "8"/"B", so price
   is frequently left blank for the user to type
 
-## In Progress
-
 ### Phase 5 — Visual + UX redesign (light, pro, faster in-store)
 - [x] M1: Design direction — UX audit, 3 visual directions, simplified flow, standalone preview (design-plan-phase5.md, design-preview-phase5.html). User picked A "Aisle" (light only), approved all 6 proposed removals; short unit labels kept as designed; no "remember last size/unit" placeholder and no Share action (not requested)
 - [x] M2: Built Aisle into index.php / css/style.css / UI layer of js/app.js (math untouched, prices identical on 16 test offers, OCR + overflow tests pass). Also fixed: Clear all → Undo left results blank. Mixed-unit products now show only the incompatible-units note; "vs best" is a currency amount per unit, not %
 - [x] M3: Independent QA (375px + 1280px, live) + fixes: edit-rename made offers vanish (blocker), toast blocked sheet toggle, invalid entries now show inline errors (price/size >0, all ≤1e9), ties all marked Best value, reserved product names ("constructor") crash, number spinners hidden, test pages no longer overwrite saved data; new tests/edit-rename-test.html; dist/ synced and re-verified
+- [x] Final tech review: verdict ship after fixes, no blockers. Fixed the one data-loss warning (Clear all → add an offer → Undo dropped the new offer); re-verified
+
+## In Progress
 
 ## Pending
 

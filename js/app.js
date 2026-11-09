@@ -925,7 +925,8 @@
 
     toastUndoBtn.onclick = function () {
       clearTimeout(removedUndoTimeout);
-      items = removedItems; // restore the whole list as it was
+      // Restore the cleared offers, keeping any offer added after Clear all (inside the 5s Undo window)
+      items = removedItems.concat(items);
       // Clear all emptied productNameOrder, so rebuild it here too or the results stay blank (same as on page load)
       syncProductNameOrder();
       saveState();
