@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Regression test — rename an offer in Edit, and reserved product names</title>
+<style>
+  body { font-family: sans-serif; padding: 16px; }
+  iframe { width: 1280px; height: 700px; border: 1px dashed #999; display: block; }
+  .row { margin-top: 8px; padding: 8px 12px; font-weight: bold; }
+  .pass { background: #d7f5d7; color: #14611c; }
+  .fail { background: #f7d7d7; color: #7a1414; }
+  code { background: #eee; padding: 2px 4px; }
+</style>
+</head>
+<body>
+
+<h1>Regression test: rename in Edit, reserved names</h1>
+<p>
+  Found in Phase 5 QA (2026-11-09). (1) Editing an offer and changing its Product name to a name that has no
+  offers yet makes the offer disappear from the results (it is still saved), because the edit path never adds
+  the new name to <code>productNameOrder</code>. (2) A product named <code>constructor</code> (or
+  <code>toString</code>, <code>__proto__</code>) throws in <code>renderResults()</code> because the groups
+  object inherits from <code>Object.prototype</code>. Both passed after the Phase 5 fix.
+  Open through the web server (same-origin iframe). This test starts from an empty list and restores your saved offers when it ends.
+</p>
+<div id="results"></div>
+<iframe id="app-frame"></iframe>
+
+<script>
+(function () {
+  'use strict';
+  var frame = document.getElementById('app-frame');
+  var out = document.getElementById('results');
+  var KEY = 'priceCompareState';
+
+  // The app shares this browser's localStorage, so keep the real saved offers aside and put them back at the end
+  var backup = localStorage.getItem(KEY);
+
+  function report(pass, message) {
+    var d = document.createElement('div');
+    d.className = 'row ' + (pass ? 'pass' : 'fail');
+    d.textContent = (pass ? 'PASS — ' : 'FAIL — ') + message;
+    out.appendChild(d);
+  }
+
+  // Loads the app fresh (empty storage), then calls ready(doc, win, errors)
+  function load(ready) {
+    localStorage.removeItem('priceCompareState');
+    frame.onload = function () {
+      var win = frame.contentWindow;
+      var errors = [];
+      win.addEventListener('error', function (e) { errors.push(e.message); });
+      ready(frame.contentDocument, win, errors);
+    };
+    frame.src = '../index.php?t=' + Date.now();
+  }
+
+  function addOffer(doc, win, name, price) {
+    function set(id, v) {
+      var el = doc.getElementById(id);
+      el.value = v;
+      el.dispatchEvent(new win.Event('input', { bubbles: true }));
+    }
+    set('item-name', name);
+    set('item-price', price);
+    set('item-unit-size', '1');
+    doc.querySelector('#item-unit-measure [data-value="l"]').click();
+    doc.getElementById('item-form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
+  }
+
+  function test1(next) {
+    load(function (doc, win) {
+      addOffer(doc, win, 'Milk', '50');
+      addOffer(doc, win, 'Milk', '45');
+      // Tap the first offer, then Edit, rename to a brand-new product name, save
+      doc.querySelector('.offer-main').click();
+      doc.querySelector('.btn-edit-sm').click();
+      var name = doc.getElementById('item-name');
+      name.value = 'Soy Milk';
+      doc.getElementById('item-form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
+      var stored = JSON.parse(localStorage.getItem('priceCompareState')).items.length;
+      var shown = doc.querySelectorAll('.offer').length;
+      report(shown === stored, 'after renaming one of 2 offers to a new product name, results show ' + shown + ' offers, storage holds ' + stored);
+      next();
+    });
+  }
+
+  function test2(next) {
+    load(function (doc, win, errors) {
+      addOffer(doc, win, 'constructor', '10');
+      report(errors.length === 0 && doc.querySelectorAll('.offer').length === 1,
+        'product named "constructor": ' + doc.querySelectorAll('.offer').length + ' offers shown, errors: ' + (errors.join('; ') || 'none'));
+      next();
+    });
+  }
+
+  test1(function () {
+    test2(function () {
+      if (backup === null) {
+        localStorage.removeItem(KEY);
+      } else {
+        localStorage.setItem(KEY, backup);
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>

@@ -146,9 +146,12 @@
   var nameInput = document.getElementById('item-name');
   var nameError = document.getElementById('name-error');
   var priceInput = document.getElementById('item-price');
+  var priceError = document.getElementById('price-error');
   var shippingInput = document.getElementById('item-shipping');
+  var shippingError = document.getElementById('shipping-error');
 
   var unitSizeInput = document.getElementById('item-unit-size');
+  var unitSizeError = document.getElementById('unit-size-error');
   var unitSizeWarning = document.getElementById('unit-size-warning');
   var unitNameEl = document.getElementById('unit-name');
   var unitMeasureGroup = document.getElementById('item-unit-measure');
@@ -165,10 +168,19 @@
 
   var fixedBundleFields = document.getElementById('fixed-bundle-fields');
   var bundleNInput = document.getElementById('bundle-n');
+  var bundleNError = document.getElementById('bundle-n-error');
   var bundleXInput = document.getElementById('bundle-x');
+  var bundleXError = document.getElementById('bundle-x-error');
 
   var secondFixedField = document.getElementById('second-fixed-field');
   var secondFixedYInput = document.getElementById('second-fixed-y');
+  var secondFixedYError = document.getElementById('second-fixed-y-error');
+
+  // Every inline field error, so a reset or a fresh edit can clear them all at once
+  var fieldErrorEls = [nameError, priceError, unitSizeError, shippingError, bundleNError, bundleXError, secondFixedYError];
+
+  // Amounts (price, size, shipping, bundle X, second price) above this are treated as typos, not real values
+  var MAX_AMOUNT = 1000000000;
 
   var previewReadoutValue = document.getElementById('preview-readout-value');
   var previewReadoutUnit = document.getElementById('preview-readout-unit');
@@ -193,6 +205,18 @@
       return window.crypto.randomUUID();
     }
     return 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+  }
+
+  // Keeps productNameOrder in step with items, after every change (add, edit, remove, undo, clear, load).
+  // A name keeps its place. A name with no items left is dropped. A new name goes to the end, in items order.
+  function syncProductNameOrder() {
+    var present = Object.create(null); // no prototype, so a product named "constructor" is an ordinary key
+    items.forEach(function (item) { present[item.name.trim()] = true; });
+    productNameOrder = productNameOrder.filter(function (name) { return present[name] === true; });
+    items.forEach(function (item) {
+      var name = item.name.trim();
+      if (productNameOrder.indexOf(name) === -1) productNameOrder.push(name);
+    });
   }
 
   // Get the currently selected pill's value from the radiogroup
@@ -517,11 +541,15 @@
     sheetEl.inert = !visible; // a closed sheet must not be reachable by Tab or screen readers
     sheetScrim.hidden = !sheetOpen || isWide();
     dockEl.hidden = sheetOpen;
+    // Phones: a pending Undo stays out of the sheet's way while the sheet is open, and comes back when it closes
+    toastEl.classList.toggle('behind-sheet', sheetOpen && !isWide());
   }
 
   function openSheet(focusEl) {
     if (!isWide()) sheetReturnFocus = document.activeElement;
     sheetOpen = true;
+    // Phones: a plain confirmation ("Offer added") would sit over the sheet's controls, so it is dismissed. Undo is kept.
+    if (!isWide() && toastUndoBtn.hidden) hideToast();
     syncSheetUI();
     if (focusEl) focusEl.focus();
   }
@@ -660,23 +688,17 @@
     submitBtn.textContent = 'Add offer';
     cancelBtn.hidden = true;
     sheetTitle.textContent = 'Add an offer';
-    nameError.hidden = true;
+    fieldErrorEls.forEach(function (el) { el.hidden = true; });
     resetCaptureBar(); // Add, Cancel edit, Clear all and form reset all end any photo card and its "from photo" flags
     updatePreview();
   }
-
-  // Clear the "enter a product name" message as soon as the user types a valid name.
-  nameInput.addEventListener('input', function () {
-    if (nameInput.value.trim()) {
-      nameError.hidden = true;
-    }
-  });
 
   function startEdit(id) {
     var item = items.filter(function (i) { return i.id === id; })[0];
     if (!item) return;
 
     resetCaptureBar(); // the form is about to show this item's values, so any photo marks no longer apply
+    fieldErrorEls.forEach(function (el) { el.hidden = true; }); // errors from an earlier failed submit don't apply to this item
     editingId = id;
     nameInput.value = item.name;
     priceInput.value = item.price;
@@ -710,39 +732,81 @@
     closeSheet();
   });
 
+  // ---------- Inline field checks (run on submit; a message clears once its field is valid) ----------
+  // Reads a typed number. Blank gives NaN, so an empty field is never valid.
+  function readNumber(text) {
+    var t = String(text).trim();
+    return t === '' ? NaN : Number(t);
+  }
+
+  // A price or size: a finite number above 0 (or 0 or more when zero is allowed), and not absurdly large
+  function isAmount(n, allowZero) {
+    return isFinite(n) && (allowZero ? n >= 0 : n > 0) && n <= MAX_AMOUNT;
+  }
+
+  // One rule per field. ok() is true when the field is valid. inMore fields sit in the closed disclosure.
+  // promo names the only promotion that uses the field; the rule is skipped for every other promotion.
+  var fieldRules = [
+    { input: nameInput, error: nameError, inMore: false,
+      ok: function () { return nameInput.value.trim() !== ''; } },
+    { input: priceInput, error: priceError, inMore: false,
+      ok: function () { return isAmount(readNumber(priceInput.value), false); } },
+    { input: unitSizeInput, error: unitSizeError, inMore: false,
+      ok: function () { return isAmount(readNumber(unitSizeInput.value), false); } },
+    { input: shippingInput, error: shippingError, inMore: true,
+      ok: function () { return shippingInput.value.trim() === '' || isAmount(readNumber(shippingInput.value), true); } },
+    { input: bundleNInput, error: bundleNError, inMore: true, promo: 'fixedBundle',
+      ok: function () { var n = parseInt(bundleNInput.value, 10); return isFinite(n) && n >= 1; } },
+    { input: bundleXInput, error: bundleXError, inMore: true, promo: 'fixedBundle',
+      ok: function () { return isAmount(readNumber(bundleXInput.value), true); } },
+    { input: secondFixedYInput, error: secondFixedYError, inMore: true, promo: 'secondFixed',
+      ok: function () { return isAmount(readNumber(secondFixedYInput.value), true); } }
+  ];
+
+  // Clears a field's message as soon as its value becomes valid
+  fieldRules.forEach(function (rule) {
+    rule.input.addEventListener('input', function () {
+      if (rule.ok()) rule.error.hidden = true;
+    });
+  });
+
   // ---------- Form submit (add or save edit) ----------
   form.addEventListener('submit', function (e) {
     e.preventDefault();
 
-    var name = nameInput.value.trim();
-    var price = parseFloat(priceInput.value);
-    var unitSize = parseFloat(unitSizeInput.value);
-    var unitOfMeasure = getUnitMeasureValue();
-    var packCount = parseInt(packCountInput.value, 10);
-    var shippingFeeRaw = shippingInput.value.trim();
-    var shippingFee = shippingFeeRaw === '' ? 0 : parseFloat(shippingFeeRaw);
-    var promoType = promoSelect.value;
+    // Check every field so each one shows its message. Focus goes to the first invalid field in form order.
+    var firstInvalid = null;
+    var moreInvalid = false;
+    fieldRules.forEach(function (rule) {
+      if (rule.promo && promoSelect.value !== rule.promo) {
+        rule.error.hidden = true;
+        return;
+      }
+      var valid = rule.ok();
+      rule.error.hidden = valid;
+      if (!valid) {
+        if (!firstInvalid) firstInvalid = rule;
+        if (rule.inMore) moreInvalid = true;
+      }
+    });
 
-    if (!name) {
-      nameError.hidden = false;
+    // An invalid field inside the closed disclosure must be visible, so open it
+    if (moreInvalid) setMoreOpen(true);
+    if (firstInvalid) {
+      firstInvalid.input.focus();
       return;
     }
-    nameError.hidden = true;
 
-    if (isNaN(price) || price < 0) {
-      return; // required attrs handle most of this, this is just a guard
-    }
-
-    if (isNaN(unitSize) || unitSize <= 0) {
-      return; // Unit size must be positive
-    }
+    var name = nameInput.value.trim();
+    var price = readNumber(priceInput.value);
+    var unitSize = readNumber(unitSizeInput.value);
+    var unitOfMeasure = getUnitMeasureValue();
+    var packCount = parseInt(packCountInput.value, 10);
+    var shippingFee = shippingInput.value.trim() === '' ? 0 : readNumber(shippingInput.value);
+    var promoType = promoSelect.value;
 
     if (!packCount || packCount < 1) {
       packCount = 1;
-    }
-
-    if (shippingFeeRaw !== '' && (isNaN(shippingFee) || shippingFee < 0)) {
-      return; // blank means 0 and is fine; a present-but-invalid value blocks submit
     }
 
     lastProductName = name; // remember for the next add
@@ -751,15 +815,10 @@
     var promo = { type: promoType };
 
     if (promoType === 'fixedBundle') {
-      var n = parseInt(bundleNInput.value, 10);
-      var x = parseFloat(bundleXInput.value);
-      if (!n || n < 1 || isNaN(x) || x < 0) return;
-      promo.n = n;
-      promo.x = x;
+      promo.n = parseInt(bundleNInput.value, 10);
+      promo.x = readNumber(bundleXInput.value);
     } else if (promoType === 'secondFixed') {
-      var y = parseFloat(secondFixedYInput.value);
-      if (isNaN(y) || y < 0) return;
-      promo.y = y;
+      promo.y = readNumber(secondFixedYInput.value);
     }
 
     var wasEditing = !!editingId; // resetForm() below clears editingId, so read it first
@@ -788,12 +847,9 @@
         promo: promo
       };
       items.push(newItem);
-      // Track product name order: only add if this is the first time we've seen this product name
-      if (productNameOrder.indexOf(name) === -1) {
-        productNameOrder.push(name);
-      }
       lastChangedId = newItem.id;
     }
+    syncProductNameOrder(); // a rename or a new name may have changed which product groups exist
 
     expandedId = null; // a saved or new offer comes back collapsed
     saveState();
@@ -832,6 +888,7 @@
       clearTimeout(removedUndoTimeout);
       items.splice(index, 0, item); // restore at its original position
       lastChangedId = item.id;
+      syncProductNameOrder();
       saveState();
       hideToast();
       renderResults();
@@ -848,6 +905,7 @@
     if (index === -1) return;
 
     var removed = items.splice(index, 1)[0];
+    syncProductNameOrder();
 
     if (editingId === id) {
       resetForm(); // don't leave the form editing an item that no longer exists
@@ -869,11 +927,7 @@
       clearTimeout(removedUndoTimeout);
       items = removedItems; // restore the whole list as it was
       // Clear all emptied productNameOrder, so rebuild it here too or the results stay blank (same as on page load)
-      productNameOrder = [];
-      items.forEach(function (item) {
-        var name = item.name.trim();
-        if (productNameOrder.indexOf(name) === -1) productNameOrder.push(name);
-      });
+      syncProductNameOrder();
       saveState();
       hideToast();
       renderResults();
@@ -919,7 +973,8 @@
     }
 
     // Group items by product name, in the order names were first added
-    var productGroups = {};
+    // Object.create(null): a product named "constructor" or "__proto__" must be an ordinary key, not an inherited one
+    var productGroups = Object.create(null);
     items.forEach(function (item) {
       var name = item.name.trim();
       if (!productGroups[name]) {
@@ -955,6 +1010,11 @@
       // A winner, bars and "vs best" deltas only make sense for 2+ offers in one unit family
       var comparable = itemsWithPricing.length > 1 && !hasIncompatibleFamilies;
 
+      // Ties are judged at the displayed precision (2 decimals), so offers that show the same price all count as best
+      var shownPrice = function (entry) { return Number(entry.pricing.pricePerBaseUnit.toFixed(2)); };
+      var bestShown = shownPrice(itemsWithPricing[0]);
+      var allTied = bestShown === shownPrice(itemsWithPricing[itemsWithPricing.length - 1]);
+
       // Product card
       var groupDiv = document.createElement('section');
       groupDiv.className = 'group';
@@ -976,9 +1036,13 @@
 
       // One line under the product: the incompatible-units note, the insight, or the single-offer note
       var insightP = document.createElement('p');
+      var showInsight = true;
       if (hasIncompatibleFamilies) {
         insightP.className = 'note';
         insightP.textContent = 'Comparing across incompatible units — no direct Best Value.';
+      } else if (itemsWithPricing.length > 1 && allTied) {
+        // Every offer costs the same per unit, so "the priciest option costs more" would be false. Show nothing.
+        showInsight = false;
       } else if (itemsWithPricing.length > 1) {
         var bestEntry = itemsWithPricing[0];
         var priciest = itemsWithPricing[itemsWithPricing.length - 1];
@@ -1001,18 +1065,17 @@
         insightP.className = 'insight';
         insightP.textContent = 'Only one offer entered — add another to see how it compares.';
       }
-      groupDiv.appendChild(insightP);
+      if (showInsight) groupDiv.appendChild(insightP);
 
       var offersDiv = document.createElement('div');
       offersDiv.className = 'offers';
 
       var maxPrice = itemsWithPricing[itemsWithPricing.length - 1].pricing.pricePerBaseUnit;
-      var bestPrice = itemsWithPricing[0].pricing.pricePerBaseUnit;
 
       itemsWithPricing.forEach(function (entry, idx) {
         var item = entry.item;
         var pricing = entry.pricing;
-        var isBest = comparable && idx === 0;
+        var isBest = comparable && shownPrice(entry) === bestShown; // every offer tied for the lowest price is best
 
         var offerDiv = document.createElement('div');
         offerDiv.className = 'offer' + (isBest ? ' win' : '');
@@ -1081,7 +1144,7 @@
             deltaWrap.className = 'o-extra';
             var deltaStrong = document.createElement('span');
             deltaStrong.className = 'delta';
-            deltaStrong.textContent = '+' + appCurrency + (pricing.pricePerBaseUnit - bestPrice).toFixed(2);
+            deltaStrong.textContent = '+' + appCurrency + (shownPrice(entry) - bestShown).toFixed(2);
             deltaWrap.appendChild(deltaStrong);
             deltaWrap.appendChild(document.createTextNode(' vs best'));
             mainBtn.appendChild(deltaWrap);
@@ -1598,12 +1661,7 @@
   // Rebuild product name order from loaded items — productNameOrder is only
   // appended to on add (see submit handler), so a fresh page load needs it
   // seeded from whatever was restored, in the order those items appear.
-  items.forEach(function (item) {
-    var name = item.name.trim();
-    if (productNameOrder.indexOf(name) === -1) {
-      productNameOrder.push(name);
-    }
-  });
+  syncProductNameOrder();
 
   appCurrencySelect.value = appCurrency;
   updatePromoUI();

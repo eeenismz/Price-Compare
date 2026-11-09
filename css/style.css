@@ -695,6 +695,11 @@ button { cursor: pointer; }
 
 .field input[type="number"] { font-variant-numeric: tabular-nums; }
 
+/* No spin buttons on any number input: typing and the pack stepper are the controls */
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
 .field input:disabled { opacity: 0.5; }
 
 .field select option { background: #FFFFFF; color: #0F1B2D; } /* set both colours explicitly (dark-select rule) */
@@ -937,6 +942,9 @@ button { cursor: pointer; }
   overflow-wrap: anywhere;
 }
 
+/* A pending Undo steps aside while the phone sheet is open (app.js sets this class). It comes back when the sheet closes. */
+.toast.behind-sheet { display: none; }
+
 .toast-undo {
   min-height: 44px;
   padding: 0 12px;
@@ -1001,7 +1009,15 @@ button { cursor: pointer; }
 
   body { padding-bottom: 32px; }
 
-  .toast { bottom: 24px; }
+  /* The sheet is the right column here, so toasts sit under the results column and never over the form */
+  .toast {
+    left: 24px;
+    right: auto;
+    bottom: 24px;
+    width: min(532px, calc(100vw - 460px));
+    max-width: none;
+    margin: 0;
+  }
 }
 
 /* ---------- Narrow-width tuning ---------- */

@@ -33,7 +33,7 @@
 </p>
 
 <div id="frame-wrap">
-  <iframe id="app-frame" src="../index.php"></iframe>
+  <iframe id="app-frame"></iframe>
 </div>
 
 <div id="result">Running...</div>
@@ -44,10 +44,24 @@
 
   var frame = document.getElementById('app-frame');
   var resultEl = document.getElementById('result');
+  var KEY = 'priceCompareState';
+
+  // The app shares this browser's localStorage, so keep the real saved offers aside and put them back after the test
+  var backup = localStorage.getItem(KEY);
+  localStorage.removeItem(KEY); // the test starts from an empty list
+
+  function restoreState() {
+    if (backup === null) {
+      localStorage.removeItem(KEY);
+    } else {
+      localStorage.setItem(KEY, backup);
+    }
+  }
 
   function report(pass, message) {
     resultEl.textContent = (pass ? 'PASS — ' : 'FAIL — ') + message;
     resultEl.className = pass ? 'pass' : 'fail';
+    restoreState();
   }
 
   frame.addEventListener('load', function () {
@@ -91,6 +105,8 @@
       );
     }, 50);
   });
+
+  frame.src = '../index.php'; // set after the load listener above, and after the backup
 })();
 </script>
 

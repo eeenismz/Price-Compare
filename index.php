@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=5a1">
+<link rel="stylesheet" href="css/style.css?v=5a2">
 </head>
 <body>
 
@@ -109,10 +109,12 @@
           <div class="field">
             <label for="item-price">Price</label>
             <input type="number" id="item-price" class="big-input" name="item-price" inputmode="decimal" step="0.01" min="0" placeholder="0.00" required enterkeyhint="next">
+            <p class="field-error" id="price-error" hidden>Enter a price above 0 (up to 1,000,000,000)</p>
           </div>
           <div class="field">
             <label for="item-unit-size">Size</label>
             <input type="number" id="item-unit-size" class="big-input" name="item-unit-size" inputmode="decimal" step="any" min="0" placeholder="850" required enterkeyhint="done">
+            <p class="field-error" id="unit-size-error" hidden>Enter a size above 0 (up to 1,000,000,000)</p>
           </div>
         </div>
 
@@ -151,6 +153,7 @@
             <div class="field">
               <label for="item-shipping">+ Shipping <span class="optional">(optional)</span></label>
               <input type="number" id="item-shipping" name="item-shipping" inputmode="decimal" step="0.01" min="0" placeholder="0">
+              <p class="field-error" id="shipping-error" hidden>Enter a shipping fee of 0 or more (up to 1,000,000,000)</p>
             </div>
 
             <div class="field">
@@ -171,16 +174,19 @@
               <div class="field">
                 <label for="bundle-n">Bundle pack count (N)</label>
                 <input type="number" id="bundle-n" name="bundle-n" inputmode="numeric" min="1" step="1">
+                <p class="field-error" id="bundle-n-error" hidden>Enter a whole number of 1 or more</p>
               </div>
               <div class="field">
                 <label for="bundle-x">Total bundle price (X)</label>
                 <input type="number" id="bundle-x" name="bundle-x" inputmode="decimal" min="0" step="0.01">
+                <p class="field-error" id="bundle-x-error" hidden>Enter a bundle price of 0 or more (up to 1,000,000,000)</p>
               </div>
             </div>
 
             <div class="field promo-extra" id="second-fixed-field" hidden>
               <label for="second-fixed-y">Second item&rsquo;s price (Y)</label>
               <input type="number" id="second-fixed-y" name="second-fixed-y" inputmode="decimal" min="0" step="0.01">
+              <p class="field-error" id="second-fixed-y-error" hidden>Enter a price of 0 or more (up to 1,000,000,000)</p>
             </div>
           </div>
         </div>
@@ -218,7 +224,7 @@
   <button type="button" id="toast-undo" class="toast-undo">Undo</button>
 </div>
 
-<script src="js/ocr-extract.js?v=5a1"></script>
-<script src="js/app.js?v=5a1"></script>
+<script src="js/ocr-extract.js?v=5a2"></script>
+<script src="js/app.js?v=5a2"></script>
 </body>
 </html>
