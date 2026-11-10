@@ -296,14 +296,16 @@ API key, no per-scan cost, images never leave the device.
 - [x] M3: Independent QA (375px + 1280px, live) + fixes: edit-rename made offers vanish (blocker), toast blocked sheet toggle, invalid entries now show inline errors (price/size >0, all ≤1e9), ties all marked Best value, reserved product names ("constructor") crash, number spinners hidden, test pages no longer overwrite saved data; new tests/edit-rename-test.html; dist/ synced and re-verified
 - [x] Final tech review: verdict ship after fixes, no blockers. Fixed the one data-loss warning (Clear all → add an offer → Undo dropped the new offer); re-verified
 
-## In Progress
-
 ### Phase 6 — Barcode scanning (autopilot run, 2026-11-10)
 Scan or type a product barcode in the add-offer sheet to fill the product name,
 size and unit. The barcode never gives a price.
 - [x] M1: Barcode logic + type-the-number entry: new js/barcode.js (check digit, per-barcode memory in the browser, free Open Food Facts lookup), "Scan barcode" chip with a number field, fills Product/Size/Unit and never the price, remembers the barcode when the offer is added. New tests/barcode-test.html (69 checks, ALL PASS). QA found and fixed: a photo taken after a barcode could save the wrong product under that barcode; after Remove, a saved barcode could no longer replace the remembered name
 - [x] M2: Camera scanning: "Scan barcode" opens a live camera view read by the browser's built-in barcode reader (Chrome on Android/desktop, no library); a refused camera or a browser without the reader (Safari on iPhone, Firefox) opens the number field with a note. Camera switches off on read, Cancel, sheet close, photo scan, form reset and hidden tab. Camera tests added to tests/barcode-test.html (81 checks, ALL PASS); independent QA passed all 8 checks, old test pages still pass, no overflow at 375px
-- [ ] M3: dist/ sync, asset version bump, regression pass, whole-run tech review, push
+- [x] M3: dist/ synced (assets at ?v=6a3), all four test pages pass (barcode-test 85 checks), whole-run tech review: ship after fixes, no blockers. Fixed from the review: "Scan again" with a different barcode could save the first product's details under the second barcode; the card now says when an online name was not used; a scan still running can't put its card over the barcode views; the chip hides if js/barcode.js fails to load
+- Known limits: iPhone (Safari) has no built-in barcode reader, so it gets the number field only; Open Food Facts is mostly food and may not know many Thai products; not yet tried on a real phone camera
+- Not done in this run: README still lacks the barcode feature and the Open Food Facts privacy/CSP note (waits for "mark as completed")
+
+## In Progress
 
 ## Pending
 

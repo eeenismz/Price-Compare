@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=6a2">
+<link rel="stylesheet" href="css/style.css?v=6a3">
 </head>
 <body>
 
@@ -255,8 +255,8 @@
   <button type="button" id="toast-undo" class="toast-undo">Undo</button>
 </div>
 
-<script src="js/ocr-extract.js?v=6a2"></script>
-<script src="js/barcode.js?v=6a2"></script>
-<script src="js/app.js?v=6a2"></script>
+<script src="js/ocr-extract.js?v=6a3"></script>
+<script src="js/barcode.js?v=6a3"></script>
+<script src="js/app.js?v=6a3"></script>
 </body>
 </html>

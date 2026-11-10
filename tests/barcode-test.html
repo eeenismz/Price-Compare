@@ -312,6 +312,39 @@
       });
     },
 
+    function secondBarcodeTakesBackTheFirst(next) {
+      load({}, function (doc, win) {
+        enterBarcode(doc, win, NUTELLA, { name: 'Nutella', unitSize: 400, unitOfMeasure: 'g' });
+        later(function () {
+          enterBarcode(doc, win, EAN8, null); // "Scan again" with a different, unknown product
+          later(function () {
+            same([$(doc, 'item-name').value, $(doc, 'item-unit-size').value, unit(doc)], ['', '', 'piece'],
+              'a second barcode takes back what the first one filled');
+            setValue(doc, win, 'item-name', 'Chewing gum');
+            setValue(doc, win, 'item-price', '12');
+            setValue(doc, win, 'item-unit-size', '10');
+            submit(doc, win);
+            same(B.recall(EAN8), { name: 'Chewing gum', unitSize: 10, unitOfMeasure: 'piece' }, 'the second barcode remembers its own product');
+            check(B.recall(NUTELLA) === null, 'the first barcode, never added, is not remembered');
+            next();
+          });
+        });
+      });
+    },
+
+    function keptNameIsPointedOut(next) {
+      load({}, function (doc, win) {
+        setValue(doc, win, 'item-name', 'Milk');
+        enterBarcode(doc, win, NUTELLA, { name: 'Nutella', unitSize: 400, unitOfMeasure: 'g' });
+        later(function () {
+          var sub = $(doc, 'capture-status-sub').textContent;
+          check($(doc, 'item-name').value === 'Milk' && sub.indexOf('Nutella') !== -1 && sub.indexOf('kept') !== -1,
+            'when an online name is not used, the card says the name was kept and shows the online one');
+          next();
+        });
+      });
+    },
+
     function editKeepsItsName(next) {
       load((function () { var m = {}; m[NUTELLA] = { name: 'Nutella', unitSize: 400, unitOfMeasure: 'g' }; return m; })(), function (doc, win) {
         setValue(doc, win, 'item-name', 'Milk');

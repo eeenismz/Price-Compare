@@ -1445,6 +1445,8 @@
     photoWrappers().forEach(function (wrapper) { clearPhotoFlag(wrapper); });
   }
 
+  // The "photo" helpers below (fillFromPhoto, setUnitFromPhoto, removePhotoFills and the flags)
+  // are also used for barcode fills; fillSource decides the wording of the flag.
   // Writes one value into an input the photo filled, flags it, and fires the same
   // events a user typing would (so Preview and the unit-size warning update).
   // Returns false if the input did not accept the value, or already held it (nothing changed, so no flag).
@@ -1697,6 +1699,7 @@
   // Shows the number field in the capture bar's slot. Fields already filled stay as they are.
   // cameraUnavailable adds a line saying why the camera did not open.
   function openBarcodeEntry(cameraUnavailable) {
+    if (ocrScanState === 'processing') resetCaptureBar(); // a scan still running must not put its card over this field later
     stopBarcodeCamera();
     captureIdleEl.hidden = true;
     captureStatusEl.hidden = true;
@@ -1799,6 +1802,7 @@
       openBarcodeEntry(true);
       return;
     }
+    if (ocrScanState === 'processing') resetCaptureBar(); // same as the number field: no late card over the camera
     stopBarcodeCamera();
     var camId = barcodeCamId;
     captureIdleEl.hidden = true;
@@ -1882,12 +1886,18 @@
     updateUnitSizeWarning();
     updatePreview();
 
+    // An online name that was not used is shown, so a leftover name from another product gets noticed
+    var kept = '';
+    if (source === 'lookup' && isSet(entry.name) && nameInput.value.trim() !== String(entry.name).trim()) {
+      kept = ' Your product name was kept; online it is listed as “' + String(entry.name).trim() + '”.';
+    }
+
     if (source === 'memory') {
       showCaptureStatus('success', 'You’ve saved this barcode before', String(entry.name).trim() + ' — now add the price.');
     } else if (filledCount > 0) {
-      showCaptureStatus('success', 'Filled in from the barcode', 'From Open Food Facts. Check the flagged fields, then add the price.');
+      showCaptureStatus('success', 'Filled in from the barcode', 'From Open Food Facts. Check the flagged fields, then add the price.' + kept);
     } else if (isSet(entry.name) || hasNumber(entry.unitSize)) {
-      showCaptureStatus('success', 'Barcode noted', 'Your own details were kept. This barcode will remember them next time.');
+      showCaptureStatus('success', 'Barcode noted', 'This barcode will remember your details next time.' + kept);
     } else {
       // Neutral, like an unreadable photo: unknown products are normal, and nothing blocks Add
       showCaptureStatus('failure', 'Barcode noted', 'Couldn’t find this one online. Fill in the details and this barcode will remember them next time.');
@@ -1902,6 +1912,14 @@
   function startBarcode(code) {
     endOcrScan(); // a barcode replaces any photo scan or lookup still running
     var scanId = ocrScanId;
+    // "Scan again" with another barcode: take back what the first barcode filled (edited fields stay),
+    // so the first product's name and size are never saved under the second barcode
+    if (captureKind === 'barcode' && ocrScanState !== 'idle') {
+      removePhotoFills();
+      clearPhotoFlags();
+      photoPrevUnit = null;
+      fillPrevName = '';
+    }
     captureKind = 'barcode';
     ocrLastMode = 'barcode';
     barcodeEntryEl.hidden = true;
@@ -1922,6 +1940,7 @@
   }
 
   barcodeBtn.addEventListener('click', openBarcodeCamera);
+  if (!window.Barcode) barcodeBtn.hidden = true; // js/barcode.js did not load: no barcode entry at all
   barcodeGoBtn.addEventListener('click', submitBarcodeEntry);
   barcodeCancelBtn.addEventListener('click', closeBarcodeEntry);
   barcodeInput.addEventListener('input', function () { barcodeError.hidden = true; });
