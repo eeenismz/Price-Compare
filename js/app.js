@@ -556,6 +556,7 @@
   }
 
   function closeSheet() {
+    closeBarcodeCamera(); // never leave the camera running behind a closed sheet
     var returnTo = sheetReturnFocus;
     var wasOpen = sheetOpen;
     sheetOpen = false;
@@ -1365,6 +1366,7 @@
     fillPrevName = '';
     formBarcode = null;
     barcodeEntryEl.hidden = true;
+    stopBarcodeCamera();
     if (ocrObjectUrl) {
       URL.revokeObjectURL(ocrObjectUrl);
       ocrObjectUrl = null;
@@ -1566,6 +1568,7 @@
     ocrLastMode = mode;
     captureKind = 'photo';
     barcodeEntryEl.hidden = true;
+    stopBarcodeCamera();
     // A photo may be of a different product, and its card shows no barcode, so an earlier
     // barcode is let go here. Otherwise Add could save this product's details under that barcode.
     formBarcode = null;
@@ -1659,7 +1662,7 @@
   });
   captureRetakeBtn.addEventListener('click', function () {
     if (ocrLastMode === 'barcode') {
-      openBarcodeEntry();
+      openBarcodeCamera(); // falls back to typing where the camera can't scan
       return;
     }
     (ocrLastMode === 'photo' ? snapInput : uploadInput).click();
@@ -1675,26 +1678,167 @@
   var barcodeGoBtn = document.getElementById('barcode-go');
   var barcodeCancelBtn = document.getElementById('barcode-cancel');
   var barcodeError = document.getElementById('barcode-error');
+  var barcodeEntryNote = document.getElementById('barcode-entry-note');
+  var barcodeCamEl = document.getElementById('barcode-cam');
+  var barcodeVideo = document.getElementById('barcode-video');
+  var barcodeCamHelp = document.getElementById('barcode-cam-help');
+  var barcodeCamTypeBtn = document.getElementById('barcode-cam-type');
+  var barcodeCamCancelBtn = document.getElementById('barcode-cam-cancel');
+
+  var BARCODE_SCAN_EVERY_MS = 200;   // how often a camera frame is checked
+  var BARCODE_SLOW_MS = 10000;       // after this with no read, the helper line suggests typing
+  var BARCODE_CAM_HELP = 'Hold the barcode inside the frame.';
+  var barcodeStream = null;          // the live camera stream, while the view is open
+  var barcodeCamId = 0;              // bumps whenever the camera opens or stops; older callbacks are ignored
+  var barcodeScanTimer = null;
+  var barcodeSlowTimer = null;
+  var barcodeDetectorPromise = null; // the browser's barcode reader, created once
 
   // Shows the number field in the capture bar's slot. Fields already filled stay as they are.
-  function openBarcodeEntry() {
+  // cameraUnavailable adds a line saying why the camera did not open.
+  function openBarcodeEntry(cameraUnavailable) {
+    stopBarcodeCamera();
     captureIdleEl.hidden = true;
     captureStatusEl.hidden = true;
     barcodeEntryEl.hidden = false;
     barcodeError.hidden = true;
+    barcodeEntryNote.hidden = cameraUnavailable !== true;
     barcodeInput.value = '';
     barcodeInput.focus();
   }
 
-  // Cancel: back to whatever the slot showed before (the chips, or the card of an earlier scan)
-  function closeBarcodeEntry() {
-    barcodeEntryEl.hidden = true;
+  // Back to whatever the slot showed before (the chips, or the card of an earlier scan)
+  function restoreCaptureSlot() {
     if (ocrScanState === 'idle') {
       captureIdleEl.hidden = false;
     } else {
       captureStatusEl.hidden = false;
     }
   }
+
+  function closeBarcodeEntry() {
+    barcodeEntryEl.hidden = true;
+    restoreCaptureSlot();
+  }
+
+  // ---------- Barcode camera ----------
+  // Uses the browser's built-in BarcodeDetector (Chrome on Android and desktop). Browsers without
+  // it (Safari on iPhone, Firefox) go straight to typing the number.
+  function canScanBarcodes() {
+    return 'BarcodeDetector' in window && !!navigator.mediaDevices &&
+      typeof navigator.mediaDevices.getUserMedia === 'function';
+  }
+
+  // The reader for retail codes. Rejects when this device supports none of them.
+  function getBarcodeDetector() {
+    if (!barcodeDetectorPromise) {
+      barcodeDetectorPromise = window.BarcodeDetector.getSupportedFormats().then(function (formats) {
+        // macOS has no separate upc_a: it reports a UPC as an EAN-13 with a leading 0
+        var wanted = ['ean_13', 'ean_8', 'upc_a'].filter(function (f) { return formats.indexOf(f) !== -1; });
+        if (!wanted.length) throw new Error('No retail barcode formats on this device');
+        return new window.BarcodeDetector({ formats: wanted });
+      });
+      barcodeDetectorPromise.catch(function () { barcodeDetectorPromise = null; });
+    }
+    return barcodeDetectorPromise;
+  }
+
+  // Turns the camera off and hides the view. Safe to call when it is not running.
+  function stopBarcodeCamera() {
+    barcodeCamId++;
+    clearTimeout(barcodeScanTimer);
+    clearTimeout(barcodeSlowTimer);
+    if (barcodeStream) {
+      barcodeStream.getTracks().forEach(function (track) { track.stop(); });
+      barcodeStream = null;
+    }
+    barcodeVideo.srcObject = null;
+    barcodeCamEl.hidden = true;
+  }
+
+  // Cancel, closing the sheet, or leaving the page: camera off, slot back to what it showed before
+  function closeBarcodeCamera() {
+    if (barcodeCamEl.hidden) return;
+    stopBarcodeCamera();
+    restoreCaptureSlot();
+  }
+
+  // Checks one camera frame, then books the next check. A code counts once the same valid
+  // number is read twice in a row, which keeps a blurry misread out of the form.
+  function scanBarcodeFrame(detector, camId, lastSeen) {
+    if (camId !== barcodeCamId) return;
+    function again(seen) {
+      barcodeScanTimer = setTimeout(function () { scanBarcodeFrame(detector, camId, seen); }, BARCODE_SCAN_EVERY_MS);
+    }
+    if (barcodeVideo.readyState < 2) { // no frame to read yet
+      again(null);
+      return;
+    }
+    detector.detect(barcodeVideo).then(function (found) {
+      if (camId !== barcodeCamId) return;
+      var code = null;
+      for (var i = 0; i < found.length && !code; i++) {
+        var candidate = window.Barcode.clean(found[i].rawValue);
+        if (candidate && window.Barcode.isValid(candidate)) code = candidate;
+      }
+      if (code && code === lastSeen) {
+        stopBarcodeCamera();
+        if (navigator.vibrate) navigator.vibrate(60);
+        startBarcode(code);
+        return;
+      }
+      again(code);
+    }).catch(function () {
+      if (camId === barcodeCamId) again(null);
+    });
+  }
+
+  // "Scan barcode": opens the camera view, or the number field where scanning isn't possible
+  function openBarcodeCamera() {
+    if (!window.Barcode || !canScanBarcodes()) {
+      openBarcodeEntry(true);
+      return;
+    }
+    stopBarcodeCamera();
+    var camId = barcodeCamId;
+    captureIdleEl.hidden = true;
+    captureStatusEl.hidden = true;
+    barcodeEntryEl.hidden = true;
+    barcodeCamHelp.textContent = BARCODE_CAM_HELP;
+    barcodeCamEl.hidden = false;
+
+    getBarcodeDetector()
+      .then(function (detector) {
+        return navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+          .then(function (stream) {
+            if (camId !== barcodeCamId) { // cancelled while the permission prompt was up
+              stream.getTracks().forEach(function (track) { track.stop(); });
+              return;
+            }
+            barcodeStream = stream;
+            barcodeVideo.srcObject = stream;
+            var playing = barcodeVideo.play();
+            if (playing && playing.catch) playing.catch(function () {});
+            barcodeSlowTimer = setTimeout(function () {
+              if (camId === barcodeCamId) barcodeCamHelp.textContent = 'Not reading it? Move closer, or type the number.';
+            }, BARCODE_SLOW_MS);
+            scanBarcodeFrame(detector, camId, null);
+          });
+      })
+      .catch(function (err) {
+        // Permission denied, no camera, or no reader for retail codes: typing always works
+        if (camId !== barcodeCamId) return;
+        console.warn('Barcode camera unavailable:', err);
+        openBarcodeEntry(true);
+      });
+  }
+
+  barcodeCamTypeBtn.addEventListener('click', function () { openBarcodeEntry(false); });
+  barcodeCamCancelBtn.addEventListener('click', closeBarcodeCamera);
+  // The camera goes off when the page is hidden (tab switch, phone locked)
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) closeBarcodeCamera();
+  });
 
   function submitBarcodeEntry() {
     var code = window.Barcode ? window.Barcode.clean(barcodeInput.value) : null;
@@ -1761,6 +1905,7 @@
     captureKind = 'barcode';
     ocrLastMode = 'barcode';
     barcodeEntryEl.hidden = true;
+    stopBarcodeCamera(); // also cancels a camera that is still waiting for permission
     formBarcode = code;
 
     var saved = window.Barcode.recall(code);
@@ -1776,7 +1921,7 @@
     });
   }
 
-  barcodeBtn.addEventListener('click', openBarcodeEntry);
+  barcodeBtn.addEventListener('click', openBarcodeCamera);
   barcodeGoBtn.addEventListener('click', submitBarcodeEntry);
   barcodeCancelBtn.addEventListener('click', closeBarcodeEntry);
   barcodeInput.addEventListener('input', function () { barcodeError.hidden = true; });

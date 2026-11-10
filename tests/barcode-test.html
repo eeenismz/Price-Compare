@@ -18,7 +18,9 @@
 <p>
   Part 1 checks the helpers in <code>js/barcode.js</code> (check digit, size parsing, saved barcodes).
   Part 2 drives the real app in the frame below with the online lookup replaced by a stub, so no
-  network is needed. Open through the web server (same-origin iframe). Your saved offers and saved
+  network is needed. Part 3 tests camera scanning with a drawn barcode standing in for the camera; it
+  needs a browser with a built-in barcode reader (Chrome on a Mac or Android) running in real time,
+  so headless Chrome with <code>--virtual-time-budget</code> fails it. Other browsers skip Part 3. Open through the web server (same-origin iframe). Your saved offers and saved
   barcodes are set aside at the start and put back at the end. Look for "ALL PASS".
 </p>
 <div id="summary">Running…</div>
@@ -145,9 +147,68 @@
   function enterBarcode(doc, win, code, lookupResult) {
     win.__lookups = win.__lookups || 0;
     win.Barcode.lookup = function () { win.__lookups++; return Promise.resolve(lookupResult); };
+    noCamera(win);
     $(doc, 'barcode-btn').click();
     $(doc, 'barcode-input').value = code;
     $(doc, 'barcode-go').click();
+  }
+
+  // Makes the frame behave like a browser with no barcode reader, so "Scan barcode" opens the number field
+  function noCamera(win) {
+    try { delete win.BarcodeDetector; } catch (e) {}
+  }
+
+  // ---------- Part 3 helpers: a drawn EAN-13 barcode as the "camera" ----------
+  var EAN_L = ['0001101', '0011001', '0010011', '0111101', '0100011', '0110001', '0101111', '0111011', '0110111', '0001011'];
+  var EAN_G = ['0100111', '0110011', '0011011', '0100001', '0011101', '0111001', '0000101', '0010001', '0001001', '0010111'];
+  var EAN_PARITY = ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL'];
+
+  function ean13Bits(code) {
+    var bits = '101';
+    var parity = EAN_PARITY[+code[0]];
+    var i;
+    for (i = 1; i <= 6; i++) bits += (parity[i - 1] === 'L' ? EAN_L : EAN_G)[+code[i]];
+    bits += '01010';
+    for (i = 7; i <= 12; i++) bits += EAN_L[+code[i]].replace(/[01]/g, function (b) { return b === '0' ? '1' : '0'; });
+    return bits + '101';
+  }
+
+  // A video stream of a canvas showing the barcode (or a blank white frame when code is null).
+  // The canvas is redrawn on a timer because a stream only gets a frame when the canvas changes.
+  function fakeCamera(code) {
+    var canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    var ctx = canvas.getContext('2d');
+    var tick = 0;
+    function draw() {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, 640, 480);
+      ctx.fillStyle = tick++ % 2 ? '#fefefe' : '#fff';
+      ctx.fillRect(0, 0, 4, 4); // a tiny change, so every draw is a new frame
+      if (!code) return;
+      var bits = ean13Bits(code);
+      ctx.fillStyle = '#000';
+      for (var i = 0; i < bits.length; i++) if (bits[i] === '1') ctx.fillRect(130 + i * 4, 120, 4, 240);
+    }
+    draw();
+    var timer = setInterval(draw, 100);
+    var stream = canvas.captureStream(10);
+    return { stream: stream, stop: function () { clearInterval(timer); } };
+  }
+
+  // Polls until test() is true or the time runs out, then calls done(true/false)
+  function waitFor(test, ms, done) {
+    var started = Date.now();
+    (function poll() {
+      if (test()) { done(true); return; }
+      if (Date.now() - started > ms) { done(false); return; }
+      setTimeout(poll, 100);
+    })();
+  }
+
+  function trackLive(cam) {
+    return cam.stream.getVideoTracks()[0].readyState === 'live';
   }
 
   function unit(doc) {
@@ -288,6 +349,7 @@
       load({}, function (doc, win) {
         var answer;
         win.Barcode.lookup = function () { return new Promise(function (resolve) { answer = resolve; }); };
+        noCamera(win);
         $(doc, 'barcode-btn').click();
         $(doc, 'barcode-input').value = NUTELLA;
         $(doc, 'barcode-go').click();
@@ -307,6 +369,124 @@
       });
     }
   ];
+
+  var canTestCamera = 'BarcodeDetector' in window && !!HTMLCanvasElement.prototype.captureStream;
+
+  var cameraTests = [
+    function cameraReadsBarcode(next) {
+      load({}, function (doc, win) {
+        var cam = fakeCamera(NUTELLA);
+        win.navigator.mediaDevices.getUserMedia = function () { return Promise.resolve(cam.stream); };
+        win.Barcode.lookup = function () { return Promise.resolve({ name: 'Nutella', unitSize: 400, unitOfMeasure: 'g' }); };
+        $(doc, 'barcode-btn').click();
+        check(!$(doc, 'barcode-cam').hidden && $(doc, 'capture-idle').hidden, '"Scan barcode" opens the camera view in place of the chips');
+        waitFor(function () { return $(doc, 'item-name').value === 'Nutella'; }, 8000, function (ok) {
+          cam.stop();
+          check(ok, 'a barcode held to the camera is read and fills the form');
+          same([$(doc, 'item-unit-size').value, unit(doc), $(doc, 'item-price').value], ['400', 'g', ''], 'size and unit fill; price stays blank');
+          check($(doc, 'barcode-cam').hidden && !$(doc, 'capture-status').hidden, 'the camera view gives way to the status card');
+          check(!trackLive(cam), 'the camera is switched off after a read');
+          next();
+        });
+      });
+    },
+
+    function cameraCancel(next) {
+      load({}, function (doc, win) {
+        var cam = fakeCamera(null);
+        win.navigator.mediaDevices.getUserMedia = function () { return Promise.resolve(cam.stream); };
+        $(doc, 'barcode-btn').click();
+        waitFor(function () { return !!$(doc, 'barcode-video').srcObject; }, 4000, function (ok) {
+          check(ok && trackLive(cam), 'the camera is live while the view is open');
+          $(doc, 'barcode-cam-cancel').click();
+          cam.stop();
+          check(!trackLive(cam) && $(doc, 'barcode-cam').hidden && !$(doc, 'capture-idle').hidden,
+            'Cancel switches the camera off and brings the chips back');
+          next();
+        });
+      });
+    },
+
+    function cameraTypeInstead(next) {
+      load({}, function (doc, win) {
+        var cam = fakeCamera(null);
+        win.navigator.mediaDevices.getUserMedia = function () { return Promise.resolve(cam.stream); };
+        $(doc, 'barcode-btn').click();
+        waitFor(function () { return !!$(doc, 'barcode-video').srcObject; }, 4000, function () {
+          $(doc, 'barcode-cam-type').click();
+          cam.stop();
+          check(!trackLive(cam) && !$(doc, 'barcode-entry').hidden && $(doc, 'barcode-entry-note').hidden,
+            '"Type the number" switches the camera off and opens the number field, without the no-camera note');
+          next();
+        });
+      });
+    },
+
+    function cameraDenied(next) {
+      load({}, function (doc, win) {
+        win.navigator.mediaDevices.getUserMedia = function () { return Promise.reject(new Error('NotAllowedError')); };
+        $(doc, 'barcode-btn').click();
+        waitFor(function () { return !$(doc, 'barcode-entry').hidden; }, 4000, function (ok) {
+          check(ok && $(doc, 'barcode-cam').hidden && !$(doc, 'barcode-entry-note').hidden,
+            'a refused camera falls back to the number field, with a note saying why');
+          next();
+        });
+      });
+    },
+
+    function lateCameraAfterCancel(next) {
+      load({}, function (doc, win) {
+        var cam = fakeCamera(NUTELLA);
+        var grant;
+        win.navigator.mediaDevices.getUserMedia = function () { return new Promise(function (resolve) { grant = resolve; }); };
+        $(doc, 'barcode-btn').click();
+        waitFor(function () { return !!grant; }, 4000, function () {
+          $(doc, 'barcode-cam-cancel').click(); // cancelled while the permission prompt is still up
+          grant(cam.stream);
+          setTimeout(function () {
+            cam.stop();
+            check(!trackLive(cam) && $(doc, 'barcode-cam').hidden && $(doc, 'item-name').value === '',
+              'a camera granted after Cancel is switched straight off and reads nothing');
+            next();
+          }, 800);
+        });
+      });
+    },
+
+    function sheetCloseStopsCamera(next) {
+      load({}, function (doc, win) {
+        var cam = fakeCamera(null);
+        win.navigator.mediaDevices.getUserMedia = function () { return Promise.resolve(cam.stream); };
+        $(doc, 'barcode-btn').click();
+        waitFor(function () { return !!$(doc, 'barcode-video').srcObject; }, 4000, function () {
+          $(doc, 'sheet-close').click();
+          cam.stop();
+          check(!trackLive(cam) && $(doc, 'barcode-cam').hidden, 'closing the sheet switches the camera off');
+          next();
+        });
+      });
+    }
+  ];
+
+  function noReaderFallsBackToTyping(next) {
+    load({}, function (doc, win) {
+      noCamera(win);
+      $(doc, 'barcode-btn').click();
+      check(!$(doc, 'barcode-entry').hidden && !$(doc, 'barcode-entry-note').hidden && $(doc, 'barcode-cam').hidden,
+        'a browser with no barcode reader (like Safari on iPhone) opens the number field with a note');
+      next();
+    });
+  }
+  formTests.push(noReaderFallsBackToTyping);
+
+  if (canTestCamera) {
+    formTests = formTests.concat(cameraTests);
+  } else {
+    var skip = document.createElement('div');
+    skip.className = 'row';
+    skip.textContent = 'SKIPPED — Part 3 (camera): this browser has no built-in barcode reader';
+    out.appendChild(skip);
+  }
 
   function finish() {
     restore(STATE_KEY, backupState);

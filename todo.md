@@ -302,7 +302,7 @@ API key, no per-scan cost, images never leave the device.
 Scan or type a product barcode in the add-offer sheet to fill the product name,
 size and unit. The barcode never gives a price.
 - [x] M1: Barcode logic + type-the-number entry: new js/barcode.js (check digit, per-barcode memory in the browser, free Open Food Facts lookup), "Scan barcode" chip with a number field, fills Product/Size/Unit and never the price, remembers the barcode when the offer is added. New tests/barcode-test.html (69 checks, ALL PASS). QA found and fixed: a photo taken after a barcode could save the wrong product under that barcode; after Remove, a saved barcode could no longer replace the remembered name
-- [ ] M2: Camera scanning with the browser's built-in barcode reader (Chrome on Android/desktop), falling back to typing
+- [x] M2: Camera scanning: "Scan barcode" opens a live camera view read by the browser's built-in barcode reader (Chrome on Android/desktop, no library); a refused camera or a browser without the reader (Safari on iPhone, Firefox) opens the number field with a note. Camera switches off on read, Cancel, sheet close, photo scan, form reset and hidden tab. Camera tests added to tests/barcode-test.html (81 checks, ALL PASS); independent QA passed all 8 checks, old test pages still pass, no overflow at 375px
 - [ ] M3: dist/ sync, asset version bump, regression pass, whole-run tech review, push
 
 ## Pending

@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=6a1">
+<link rel="stylesheet" href="css/style.css?v=6a2">
 </head>
 <body>
 
@@ -86,11 +86,25 @@
       <div class="field barcode-entry" id="barcode-entry" hidden>
         <label for="barcode-input">Barcode number</label>
         <div class="barcode-entry-row">
-          <input type="text" id="barcode-input" inputmode="numeric" autocomplete="off" maxlength="24" placeholder="Digits under the bars" enterkeyhint="go" aria-describedby="barcode-error">
+          <input type="text" id="barcode-input" inputmode="numeric" autocomplete="off" maxlength="24" placeholder="Barcode digits" enterkeyhint="go" aria-describedby="barcode-error">
           <button type="button" class="btn-status-sm" id="barcode-go">Look up</button>
           <button type="button" class="btn-status-sm" id="barcode-cancel">Cancel</button>
         </div>
         <p class="field-error" id="barcode-error" hidden>That isn&rsquo;t a product barcode. Check the digits under the bars.</p>
+        <p class="hint" id="barcode-entry-note" hidden>Camera scanning isn&rsquo;t available here, so type the digits under the bars.</p>
+      </div>
+
+      <!-- Barcode camera: live view, read by the browser's own barcode reader where it has one -->
+      <div class="barcode-cam" id="barcode-cam" hidden>
+        <div class="barcode-cam-view">
+          <video id="barcode-video" playsinline muted aria-label="Camera view"></video>
+          <div class="barcode-cam-line" aria-hidden="true"></div>
+        </div>
+        <p class="capture-helper" id="barcode-cam-help" aria-live="polite">Hold the barcode inside the frame.</p>
+        <div class="capture-status-actions">
+          <button type="button" class="btn-status-sm" id="barcode-cam-type">Type the number</button>
+          <button type="button" class="btn-status-sm" id="barcode-cam-cancel">Cancel</button>
+        </div>
       </div>
 
       <!-- Hidden file pickers: the chips and the dock camera call .click() on these -->
@@ -241,8 +255,8 @@
   <button type="button" id="toast-undo" class="toast-undo">Undo</button>
 </div>
 
-<script src="js/ocr-extract.js?v=6a1"></script>
-<script src="js/barcode.js?v=6a1"></script>
-<script src="js/app.js?v=6a1"></script>
+<script src="js/ocr-extract.js?v=6a2"></script>
+<script src="js/barcode.js?v=6a2"></script>
+<script src="js/app.js?v=6a2"></script>
 </body>
 </html>

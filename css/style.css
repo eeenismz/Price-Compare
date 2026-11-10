@@ -669,6 +669,34 @@ button { cursor: pointer; }
 
 .barcode-entry-row input { font-variant-numeric: tabular-nums; }
 
+/* Barcode camera view */
+.barcode-cam-view {
+  position: relative;
+  height: 180px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--ink);
+}
+
+.barcode-cam-view video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Aiming line across the middle of the view */
+.barcode-cam-line {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 50%;
+  height: 2px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px rgba(15, 27, 45, 0.35);
+  opacity: 0.9;
+}
+
 /* Fields */
 .field-row {
   display: grid;
