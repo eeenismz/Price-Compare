@@ -652,6 +652,23 @@ button { cursor: pointer; }
 .status-dot.dot-success { background: var(--win); box-shadow: 0 0 0 3px var(--win-tint); }
 .status-dot.dot-fail { background: var(--muted); }
 
+/* Barcode: the card has no photo, so the thumb shows bars instead */
+.capture-status-card.is-barcode .capture-thumb img { display: none; }
+
+.capture-status-card.is-barcode .capture-thumb {
+  background: repeating-linear-gradient(90deg, var(--ink) 0 2px, transparent 2px 5px, var(--ink) 5px 6px, transparent 6px 10px) center / 32px 28px no-repeat, var(--surface);
+  border: 1px solid var(--line);
+}
+
+/* Barcode number entry (takes the chips' place while open) */
+.barcode-entry-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 6px;
+}
+
+.barcode-entry-row input { font-variant-numeric: tabular-nums; }
+
 /* Fields */
 .field-row {
   display: grid;

@@ -130,6 +130,7 @@
   var lastChangedId = null;    // id of the item to flash after the next render
   var removedUndoTimeout = null;
   var productNameOrder = [];   // tracks the order product names are first added, for consistent ordering in results
+  var namePrefilled = false;   // true while the Product field still holds the untouched remembered name (a saved barcode may replace it)
 
   // ---------- DOM refs ----------
   var form = document.getElementById('item-form');
@@ -679,6 +680,7 @@
     editingId = null;
     form.reset();
     nameInput.value = lastProductName; // pre-fill with the last name — comparing offers of the same product shouldn't mean retyping it each time
+    namePrefilled = lastProductName !== '';
     unitSizeInput.value = '';
     setUnitMeasureValue(lastUnitOfMeasure); // use the last-selected unit, defaulting to 'piece'
     packCountInput.value = '1';
@@ -700,6 +702,7 @@
     resetCaptureBar(); // the form is about to show this item's values, so any photo marks no longer apply
     fieldErrorEls.forEach(function (el) { el.hidden = true; }); // errors from an earlier failed submit don't apply to this item
     editingId = id;
+    namePrefilled = false; // this is the offer's own name, not the remembered one
     nameInput.value = item.name;
     priceInput.value = item.price;
     unitSizeInput.value = item.unitSize;
@@ -850,6 +853,11 @@
       lastChangedId = newItem.id;
     }
     syncProductNameOrder(); // a rename or a new name may have changed which product groups exist
+
+    // A barcode scanned or typed for this offer now remembers these details for next time
+    if (formBarcode && window.Barcode) {
+      window.Barcode.remember(formBarcode, { name: name, unitSize: unitSize, unitOfMeasure: unitOfMeasure });
+    }
 
     expandedId = null; // a saved or new offer comes back collapsed
     saveState();
@@ -1253,6 +1261,10 @@
   var ocrScriptPromise = null;  // cached script load, so the library downloads once
   var ocrWorkerPromise = null;  // one worker, reused across scans until a cancel or timeout stops it
   var photoPrevUnit = null;     // unit pill the user had before a photo changed it; "Remove" puts it back
+  var captureKind = 'photo';    // what the status card is showing: 'photo' (OCR) or 'barcode'
+  var fillSource = 'photo';     // wording of the flag on filled fields: "from photo" or "from barcode"
+  var fillPrevName = '';        // product name a barcode replaced; "Remove" puts it back
+  var formBarcode = null;       // barcode attached to the offer in the form; remembered when the offer is saved
 
   // Inject the pinned Tesseract.js script once (with SRI). A failed load is retried on the next capture.
   function loadTesseract() {
@@ -1314,7 +1326,8 @@
   function endOcrScan() {
     ocrScanId++;
     clearOcrTimers();
-    if (ocrScanState === 'processing') stopOcrWorker();
+    // A barcode lookup has no worker to stop; its late answer is ignored through the scan id
+    if (ocrScanState === 'processing' && captureKind === 'photo') stopOcrWorker();
   }
 
   // Shows the status card in the capture bar's slot. Processing gets Cancel;
@@ -1325,6 +1338,7 @@
     captureIdleEl.hidden = true;
     captureStatusEl.hidden = false;
     captureStatusEl.className = 'capture-status-card' +
+      (captureKind === 'barcode' ? ' is-barcode' : '') +
       (state === 'success' ? ' status-success' : '') +
       (state === 'failure' ? ' status-fail' : '');
     captureThumbEl.className = 'capture-thumb' + (processing ? ' is-processing' : '');
@@ -1335,6 +1349,7 @@
     captureStatusSub.textContent = sub;
     captureCancelBtn.hidden = !processing;
     captureRetakeBtn.hidden = processing;
+    captureRetakeBtn.textContent = captureKind === 'barcode' ? 'Scan again' : 'Retake';
     captureRemoveBtn.hidden = processing;
   }
 
@@ -1347,6 +1362,9 @@
   function showIdle() {
     clearPhotoFlags();
     photoPrevUnit = null;
+    fillPrevName = '';
+    formBarcode = null;
+    barcodeEntryEl.hidden = true;
     if (ocrObjectUrl) {
       URL.revokeObjectURL(ocrObjectUrl);
       ocrObjectUrl = null;
@@ -1409,7 +1427,7 @@
     wrapper.classList.add('prefilled');
     var flag = document.createElement('span');
     flag.className = 'prefilled-flag';
-    flag.textContent = 'from photo';
+    flag.textContent = fillSource === 'barcode' ? 'from barcode' : 'from photo';
     wrapper.querySelector('label').appendChild(flag);
   }
 
@@ -1463,7 +1481,7 @@
   // the photo changed goes back to the one the user had.
   function removePhotoFills() {
     [
-      { input: nameInput, value: '' },
+      { input: nameInput, value: fillPrevName }, // blank, or the name a barcode replaced
       { input: priceInput, value: '' },
       { input: unitSizeInput, value: '' },
       { input: packCountInput, value: '1' }
@@ -1475,6 +1493,9 @@
       fill.input.dispatchEvent(new Event('change', { bubbles: true }));
     });
 
+    // The name that came back is the untouched remembered one again, so a saved barcode may replace it again
+    if (fillPrevName !== '' && nameInput.value === fillPrevName) namePrefilled = true;
+
     var unitWrap = unitMeasureGroup.closest('.unit-compact-wrap');
     if (unitWrap.classList.contains('prefilled') && photoPrevUnit) {
       selectUnitPillQuietly(photoPrevUnit);
@@ -1485,6 +1506,7 @@
 
   // Fill rules: only blank fields get filled, so typed values and the remembered product name are never overwritten
   function applyExtraction(ex) {
+    fillSource = 'photo';
     var filledCount = 0;
     var missing = []; // essential fields the photo could not read, used for the partial-success wording
 
@@ -1542,6 +1564,11 @@
     endOcrScan(); // a new photo replaces any scan still running
     var scanId = ocrScanId;
     ocrLastMode = mode;
+    captureKind = 'photo';
+    barcodeEntryEl.hidden = true;
+    // A photo may be of a different product, and its card shows no barcode, so an earlier
+    // barcode is let go here. Otherwise Add could save this product's details under that barcode.
+    formBarcode = null;
 
     if (ocrObjectUrl) URL.revokeObjectURL(ocrObjectUrl);
     ocrObjectUrl = URL.createObjectURL(file);
@@ -1631,7 +1658,138 @@
     resetCaptureBar();
   });
   captureRetakeBtn.addEventListener('click', function () {
+    if (ocrLastMode === 'barcode') {
+      openBarcodeEntry();
+      return;
+    }
     (ocrLastMode === 'photo' ? snapInput : uploadInput).click();
+  });
+
+  // ---------- Barcode entry (Phase 6) ----------
+  // A barcode identifies the product, so it fills name, size and unit. It never fills the price.
+  // Details come from what the user saved for that barcode before (this browser only), or, for
+  // a barcode seen for the first time, from the free Open Food Facts database (js/barcode.js).
+  var barcodeBtn = document.getElementById('barcode-btn');
+  var barcodeEntryEl = document.getElementById('barcode-entry');
+  var barcodeInput = document.getElementById('barcode-input');
+  var barcodeGoBtn = document.getElementById('barcode-go');
+  var barcodeCancelBtn = document.getElementById('barcode-cancel');
+  var barcodeError = document.getElementById('barcode-error');
+
+  // Shows the number field in the capture bar's slot. Fields already filled stay as they are.
+  function openBarcodeEntry() {
+    captureIdleEl.hidden = true;
+    captureStatusEl.hidden = true;
+    barcodeEntryEl.hidden = false;
+    barcodeError.hidden = true;
+    barcodeInput.value = '';
+    barcodeInput.focus();
+  }
+
+  // Cancel: back to whatever the slot showed before (the chips, or the card of an earlier scan)
+  function closeBarcodeEntry() {
+    barcodeEntryEl.hidden = true;
+    if (ocrScanState === 'idle') {
+      captureIdleEl.hidden = false;
+    } else {
+      captureStatusEl.hidden = false;
+    }
+  }
+
+  function submitBarcodeEntry() {
+    var code = window.Barcode ? window.Barcode.clean(barcodeInput.value) : null;
+    if (!code || !window.Barcode.isValid(code)) {
+      barcodeError.hidden = false; // the check digit catches most typos
+      barcodeInput.focus();
+      return;
+    }
+    startBarcode(code);
+  }
+
+  // Fill rules for a barcode. Blank fields get filled, like a photo. One difference: a barcode the
+  // user saved before may replace the untouched remembered product name, because it names the
+  // product exactly. A name the user typed, and the name of an offer being edited, are never replaced.
+  function applyBarcode(entry, source) {
+    fillSource = 'barcode';
+    entry = entry || {};
+    var filledCount = 0;
+
+    if (isSet(entry.name)) {
+      var name = String(entry.name).trim();
+      var mayReplace = source === 'memory' && namePrefilled && !editingId;
+      if (nameInput.value.trim() === '' || mayReplace) {
+        var before = nameInput.value;
+        if (fillFromPhoto(nameInput, name)) {
+          fillPrevName = before;
+          namePrefilled = false;
+          filledCount++;
+        }
+      }
+    }
+
+    // Size and unit go together, and only into a blank Size field
+    var hasUnit = isSet(entry.unitOfMeasure) && UNIT_INFO.hasOwnProperty(entry.unitOfMeasure);
+    if (hasNumber(entry.unitSize) && hasUnit && unitSizeInput.value === '' &&
+        fillFromPhoto(unitSizeInput, Number(entry.unitSize))) {
+      setUnitFromPhoto(entry.unitOfMeasure);
+      filledCount++;
+    }
+
+    updateUnitSizeWarning();
+    updatePreview();
+
+    if (source === 'memory') {
+      showCaptureStatus('success', 'You’ve saved this barcode before', String(entry.name).trim() + ' — now add the price.');
+    } else if (filledCount > 0) {
+      showCaptureStatus('success', 'Filled in from the barcode', 'From Open Food Facts. Check the flagged fields, then add the price.');
+    } else if (isSet(entry.name) || hasNumber(entry.unitSize)) {
+      showCaptureStatus('success', 'Barcode noted', 'Your own details were kept. This barcode will remember them next time.');
+    } else {
+      // Neutral, like an unreadable photo: unknown products are normal, and nothing blocks Add
+      showCaptureStatus('failure', 'Barcode noted', 'Couldn’t find this one online. Fill in the details and this barcode will remember them next time.');
+    }
+
+    // Straight to the first thing still missing (usually the price)
+    var next = nameInput.value.trim() === '' ? nameInput : (priceInput.value === '' ? priceInput : null);
+    if (next) next.focus();
+  }
+
+  // Runs one barcode: saved details first (instant, works offline), otherwise the online lookup
+  function startBarcode(code) {
+    endOcrScan(); // a barcode replaces any photo scan or lookup still running
+    var scanId = ocrScanId;
+    captureKind = 'barcode';
+    ocrLastMode = 'barcode';
+    barcodeEntryEl.hidden = true;
+    formBarcode = code;
+
+    var saved = window.Barcode.recall(code);
+    if (saved) {
+      applyBarcode(saved, 'memory');
+      return;
+    }
+
+    showCaptureStatus('processing', 'Looking up barcode…', code);
+    window.Barcode.lookup(code).then(function (found) {
+      if (scanId !== ocrScanId) return; // cancelled or replaced meanwhile
+      applyBarcode(found, 'lookup');
+    });
+  }
+
+  barcodeBtn.addEventListener('click', openBarcodeEntry);
+  barcodeGoBtn.addEventListener('click', submitBarcodeEntry);
+  barcodeCancelBtn.addEventListener('click', closeBarcodeEntry);
+  barcodeInput.addEventListener('input', function () { barcodeError.hidden = true; });
+  barcodeInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.isComposing) {
+      e.preventDefault();
+      submitBarcodeEntry();
+    }
+  });
+
+  // Typing in Product makes the name the user's own, so a barcode no longer replaces it
+  nameInput.addEventListener('input', function (e) {
+    if (e.isTrusted) namePrefilled = false;
   });
 
   // A "from photo" flag clears as soon as the user edits that field. Our own fills dispatch

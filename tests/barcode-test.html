@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Barcode tests — helpers and form fill</title>
+<style>
+  body { font-family: sans-serif; padding: 16px; }
+  iframe { width: 1280px; height: 700px; border: 1px dashed #999; display: block; }
+  .row { margin-top: 4px; padding: 6px 12px; font-weight: bold; }
+  .pass { background: #d7f5d7; color: #14611c; }
+  .fail { background: #f7d7d7; color: #7a1414; }
+  #summary { margin: 12px 0; padding: 10px 12px; font-size: 20px; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>Barcode tests (Phase 6)</h1>
+<p>
+  Part 1 checks the helpers in <code>js/barcode.js</code> (check digit, size parsing, saved barcodes).
+  Part 2 drives the real app in the frame below with the online lookup replaced by a stub, so no
+  network is needed. Open through the web server (same-origin iframe). Your saved offers and saved
+  barcodes are set aside at the start and put back at the end. Look for "ALL PASS".
+</p>
+<div id="summary">Running…</div>
+<div id="results"></div>
+<iframe id="app-frame"></iframe>
+
+<script src="../js/barcode.js"></script>
+<script>
+(function () {
+  'use strict';
+  var B = window.Barcode;
+  var frame = document.getElementById('app-frame');
+  var out = document.getElementById('results');
+  var summary = document.getElementById('summary');
+  var STATE_KEY = 'priceCompareState';
+  var failed = 0;
+  var total = 0;
+
+  // The app shares this browser's localStorage, so keep the real data aside and put it back at the end
+  var backupState = localStorage.getItem(STATE_KEY);
+  var backupCodes = localStorage.getItem(B.MEMORY_KEY);
+
+  function restore(key, value) {
+    if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value);
+  }
+
+  function check(pass, message) {
+    total++;
+    if (!pass) failed++;
+    var d = document.createElement('div');
+    d.className = 'row ' + (pass ? 'pass' : 'fail');
+    d.textContent = (pass ? 'PASS — ' : 'FAIL — ') + message;
+    out.appendChild(d);
+  }
+
+  function same(actual, expected, message) {
+    var a = JSON.stringify(actual);
+    var e = JSON.stringify(expected);
+    check(a === e, message + (a === e ? '' : ' (got ' + a + ', expected ' + e + ')'));
+  }
+
+  // ---------- Part 1: helpers ----------
+  var NUTELLA = '3017620422003'; // EAN-13
+  var UPC = '036000291452';      // UPC-A
+  var EAN8 = '96385074';
+
+  same(B.clean('3017620422003'), NUTELLA, 'clean keeps a 13-digit code');
+  same(B.clean(' 3017-6204 22003 '), NUTELLA, 'clean drops spaces and dashes');
+  same(B.clean('30176204220o3'), null, 'clean rejects letters');
+  same(B.clean('12345'), null, 'clean rejects a wrong length');
+  same(B.clean(''), null, 'clean rejects blank');
+  same(B.clean(null), null, 'clean rejects null');
+
+  same(B.isValid(NUTELLA), true, 'EAN-13 with a correct check digit is valid');
+  same(B.isValid('3017620422004'), false, 'EAN-13 with a wrong check digit is rejected');
+  same(B.isValid('3017620242003'), false, 'two swapped digits are rejected');
+  same(B.isValid(UPC), true, 'UPC-A is valid');
+  same(B.isValid(EAN8), true, 'EAN-8 is valid');
+  same(B.isValid('0000000000000'), false, 'all zeros is rejected');
+  same(B.isValid('abc'), false, 'text is rejected');
+
+  same(B.key(UPC), B.key('0' + UPC), 'a UPC and the same code as an EAN-13 share one key');
+  same(B.key(NUTELLA).length, 14, 'keys are 14 digits');
+
+  same(B.parseQuantity({ product_quantity: 400, product_quantity_unit: 'g' }), { unitSize: 400, unitOfMeasure: 'g' }, 'number + unit from the database');
+  same(B.parseQuantity({ product_quantity: '33', product_quantity_unit: 'cl' }), { unitSize: 330, unitOfMeasure: 'ml' }, 'centilitres become millilitres');
+  same(B.parseQuantity({ quantity: '400 g e' }), { unitSize: 400, unitOfMeasure: 'g' }, 'free text "400 g e"');
+  same(B.parseQuantity({ quantity: '1,5 L' }), { unitSize: 1.5, unitOfMeasure: 'l' }, 'free text with a decimal comma');
+  same(B.parseQuantity({ quantity: '850ml' }), { unitSize: 850, unitOfMeasure: 'ml' }, 'free text without a space');
+  same(B.parseQuantity({ quantity: '6 x 330 ml' }), null, 'a multipack text is left alone');
+  same(B.parseQuantity({ quantity: '12 oz' }), null, 'an unknown unit is left alone');
+  same(B.parseQuantity({ quantity: '' }), null, 'blank quantity');
+  same(B.parseQuantity({ product_quantity: 0, product_quantity_unit: 'g' }), null, 'zero is not a size');
+  same(B.parseQuantity(null), null, 'no product');
+
+  same(B.fromLookup({ status: 0 }), null, 'product not found');
+  same(B.fromLookup(null), null, 'no response');
+  same(B.fromLookup({ status: 1, product: { product_name: ' Soda   water ', quantity: '' } }),
+    { name: 'Soda water', unitSize: null, unitOfMeasure: null }, 'name only, tidied');
+  same(B.fromLookup({ status: 1, product: { product_name: '', quantity: '' } }), null, 'found but empty');
+  same(B.fromLookup({ status: 1, product: { product_name: new Array(200).join('x') } }).name.length, 80, 'a very long name is cut to 80');
+  same(B.fromLookup({ status: 1, product: { product_name: { a: 1 }, product_quantity: 1, product_quantity_unit: 'kg' } }),
+    { name: null, unitSize: 1, unitOfMeasure: 'kg' }, 'a non-text name is ignored');
+
+  localStorage.removeItem(B.MEMORY_KEY);
+  same(B.recall(NUTELLA), null, 'nothing saved yet');
+  same(B.remember(NUTELLA, { name: 'Nutella', unitSize: 400, unitOfMeasure: 'g' }), true, 'remember stores a barcode');
+  same(B.recall(NUTELLA), { name: 'Nutella', unitSize: 400, unitOfMeasure: 'g' }, 'recall returns it');
+  same(B.remember(UPC, { name: 'Tissue', unitSize: 100, unitOfMeasure: 'sheet' }), true, 'remember a second one');
+  same(B.recall('0' + UPC), { name: 'Tissue', unitSize: 100, unitOfMeasure: 'sheet' }, 'recall by the EAN-13 form of a UPC');
+  same(B.remember('3017620422004', { name: 'X', unitSize: 1, unitOfMeasure: 'g' }), false, 'a bad check digit is not stored');
+  same(B.remember(EAN8, { name: '', unitSize: 1, unitOfMeasure: 'g' }), false, 'a blank name is not stored');
+  same(B.remember(EAN8, { name: 'X', unitSize: 0, unitOfMeasure: 'g' }), false, 'a zero size is not stored');
+  same(B.remember(EAN8, { name: 'X', unitSize: 1, unitOfMeasure: 'oz' }), false, 'an unknown unit is not stored');
+  localStorage.setItem(B.MEMORY_KEY, '{not json');
+  same(B.recall(NUTELLA), null, 'broken storage reads as empty');
+  same(B.remember(NUTELLA, { name: 'Nutella', unitSize: 400, unitOfMeasure: 'g' }), true, 'and can be written again');
+  localStorage.setItem(B.MEMORY_KEY, JSON.stringify({ '__proto__x': 1, '00003017620422003': { name: 'Bad', unitSize: 'big', unitOfMeasure: 'g' } }));
+  same(B.recall(NUTELLA), null, 'a stored entry of the wrong shape is skipped');
+
+  // ---------- Part 2: the form ----------
+  // Loads the app fresh (no offers; saved barcodes as given), then calls ready(doc, win)
+  function load(savedCodes, ready) {
+    localStorage.removeItem(STATE_KEY);
+    localStorage.removeItem(B.MEMORY_KEY);
+    Object.keys(savedCodes || {}).forEach(function (code) { B.remember(code, savedCodes[code]); });
+    frame.onload = function () { ready(frame.contentDocument, frame.contentWindow); };
+    frame.src = '../index.php?t=' + Date.now();
+  }
+
+  function $(doc, id) { return doc.getElementById(id); }
+
+  function setValue(doc, win, id, v) {
+    var el = $(doc, id);
+    el.value = v;
+    el.dispatchEvent(new win.Event('input', { bubbles: true }));
+  }
+
+  function submit(doc, win) {
+    $(doc, 'item-form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
+  }
+
+  // Types a barcode into the entry and presses Look up. lookupResult is what the stubbed online lookup answers.
+  function enterBarcode(doc, win, code, lookupResult) {
+    win.__lookups = win.__lookups || 0;
+    win.Barcode.lookup = function () { win.__lookups++; return Promise.resolve(lookupResult); };
+    $(doc, 'barcode-btn').click();
+    $(doc, 'barcode-input').value = code;
+    $(doc, 'barcode-go').click();
+  }
+
+  function unit(doc) {
+    return doc.querySelector('#item-unit-measure [aria-checked="true"]').dataset.value;
+  }
+
+  function later(fn) { setTimeout(fn, 30); } // lets the stubbed lookup's promise settle
+
+  var formTests = [
+    function invalidNumber(next) {
+      load({}, function (doc, win) {
+        enterBarcode(doc, win, '3017620422004', null);
+        later(function () {
+          check(!$(doc, 'barcode-error').hidden && !$(doc, 'barcode-entry').hidden && win.__lookups === 0,
+            'a mistyped barcode shows the message, stays on the entry and looks nothing up');
+          $(doc, 'barcode-cancel').click();
+          check($(doc, 'barcode-entry').hidden && !$(doc, 'capture-idle').hidden, 'Cancel brings the chips back');
+          next();
+        });
+      });
+    },
+
+    function lookupFillsBlankForm(next) {
+      load({}, function (doc, win) {
+        enterBarcode(doc, win, NUTELLA, { name: 'Nutella', unitSize: 400, unitOfMeasure: 'g' });
+        later(function () {
+          same([$(doc, 'item-name').value, $(doc, 'item-unit-size').value, unit(doc), $(doc, 'item-price').value],
+            ['Nutella', '400', 'g', ''], 'first-time barcode fills name, size and unit, never the price');
+          var flags = Array.prototype.map.call(doc.querySelectorAll('.prefilled-flag'), function (f) { return f.textContent; });
+          same(flags, ['from barcode', 'from barcode', 'from barcode'], 'filled fields are flagged "from barcode"');
+          check(!$(doc, 'capture-status').hidden && $(doc, 'capture-status').className.indexOf('is-barcode') !== -1,
+            'the status card shows, in its barcode look');
+          check(B.recall(NUTELLA) === null, 'nothing is remembered until the offer is added');
+          setValue(doc, win, 'item-price', '159');
+          submit(doc, win);
+          same(B.recall(NUTELLA), { name: 'Nutella', unitSize: 400, unitOfMeasure: 'g' }, 'adding the offer remembers the barcode');
+          same(doc.querySelectorAll('.offer').length, 1, 'the offer is added');
+          check(doc.querySelectorAll('.prefilled-flag').length === 0 && !$(doc, 'capture-idle').hidden,
+            'after Add the flags are gone and the chips are back');
+          next();
+        });
+      });
+    },
+
+    function savedBarcodeReplacesRememberedName(next) {
+      load((function () { var m = {}; m[NUTELLA] = { name: 'Nutella', unitSize: 400, unitOfMeasure: 'g' }; return m; })(), function (doc, win) {
+        // Add a different product by hand, so the next form opens with "Milk" remembered
+        setValue(doc, win, 'item-name', 'Milk');
+        setValue(doc, win, 'item-price', '50');
+        setValue(doc, win, 'item-unit-size', '2');
+        doc.querySelector('#item-unit-measure [data-value="l"]').click();
+        submit(doc, win);
+        same($(doc, 'item-name').value, 'Milk', 'the next form remembers "Milk"');
+        enterBarcode(doc, win, NUTELLA, { name: 'SHOULD NOT BE USED' });
+        later(function () {
+          same([$(doc, 'item-name').value, $(doc, 'item-unit-size').value, unit(doc)], ['Nutella', '400', 'g'],
+            'a saved barcode replaces the untouched remembered name and fills size and unit');
+          same(win.__lookups, 0, 'a saved barcode needs no online lookup');
+          $(doc, 'capture-remove-btn').click();
+          same([$(doc, 'item-name').value, $(doc, 'item-unit-size').value, unit(doc)], ['Milk', '', 'l'],
+            'Remove puts the remembered name and unit back and clears the size');
+          enterBarcode(doc, win, NUTELLA, null);
+          same($(doc, 'item-name').value, 'Nutella', 'after Remove, the same saved barcode can replace the remembered name again');
+          $(doc, 'capture-remove-btn').click();
+          same($(doc, 'item-name').value, 'Milk', 'and Remove puts it back again');
+          setValue(doc, win, 'item-price', '60');
+          setValue(doc, win, 'item-unit-size', '1');
+          submit(doc, win);
+          same(B.recall(NUTELLA), { name: 'Nutella', unitSize: 400, unitOfMeasure: 'g' }, 'after Remove, adding an offer does not rewrite the barcode');
+          next();
+        });
+      });
+    },
+
+    function ownNameIsKept(next) {
+      load({}, function (doc, win) {
+        setValue(doc, win, 'item-name', 'My hazelnut spread');
+        enterBarcode(doc, win, NUTELLA, { name: 'Nutella', unitSize: 400, unitOfMeasure: 'g' });
+        later(function () {
+          same([$(doc, 'item-name').value, $(doc, 'item-unit-size').value, unit(doc)], ['My hazelnut spread', '400', 'g'],
+            'a looked-up name never replaces a name already in the field; the size still fills');
+          setValue(doc, win, 'item-price', '159');
+          submit(doc, win);
+          same(B.recall(NUTELLA), { name: 'My hazelnut spread', unitSize: 400, unitOfMeasure: 'g' }, 'the barcode remembers the name the user chose');
+          next();
+        });
+      });
+    },
+
+    function lookupNeverReplacesRememberedName(next) {
+      load({}, function (doc, win) {
+        setValue(doc, win, 'item-name', 'Milk');
+        setValue(doc, win, 'item-price', '50');
+        setValue(doc, win, 'item-unit-size', '2');
+        submit(doc, win);
+        enterBarcode(doc, win, NUTELLA, { name: 'Nutella', unitSize: 400, unitOfMeasure: 'g' });
+        later(function () {
+          same($(doc, 'item-name').value, 'Milk', 'an online name does not replace the remembered name (only a saved barcode may)');
+          next();
+        });
+      });
+    },
+
+    function editKeepsItsName(next) {
+      load((function () { var m = {}; m[NUTELLA] = { name: 'Nutella', unitSize: 400, unitOfMeasure: 'g' }; return m; })(), function (doc, win) {
+        setValue(doc, win, 'item-name', 'Milk');
+        setValue(doc, win, 'item-price', '50');
+        setValue(doc, win, 'item-unit-size', '2');
+        submit(doc, win);
+        doc.querySelector('.offer-main').click();
+        doc.querySelector('.btn-edit-sm').click();
+        enterBarcode(doc, win, NUTELLA, null);
+        later(function () {
+          same([$(doc, 'item-name').value, $(doc, 'item-unit-size').value], ['Milk', '2'], 'in Edit, a saved barcode changes neither the name nor the size');
+          next();
+        });
+      });
+    },
+
+    function unknownBarcodeIsRememberedAfterAdd(next) {
+      load({}, function (doc, win) {
+        enterBarcode(doc, win, EAN8, null);
+        later(function () {
+          check($(doc, 'capture-status-text').textContent === 'Barcode noted' && $(doc, 'item-name').value === '',
+            'an unknown barcode shows "Barcode noted" and fills nothing');
+          setValue(doc, win, 'item-name', 'Local soy sauce');
+          setValue(doc, win, 'item-price', '35');
+          setValue(doc, win, 'item-unit-size', '700');
+          doc.querySelector('#item-unit-measure [data-value="ml"]').click();
+          submit(doc, win);
+          same(B.recall(EAN8), { name: 'Local soy sauce', unitSize: 700, unitOfMeasure: 'ml' }, 'the typed details are remembered for that barcode');
+          next();
+        });
+      });
+    },
+
+    function cancelDuringLookup(next) {
+      load({}, function (doc, win) {
+        var answer;
+        win.Barcode.lookup = function () { return new Promise(function (resolve) { answer = resolve; }); };
+        $(doc, 'barcode-btn').click();
+        $(doc, 'barcode-input').value = NUTELLA;
+        $(doc, 'barcode-go').click();
+        check(!$(doc, 'capture-cancel-btn').hidden, 'a lookup in progress offers Cancel');
+        $(doc, 'capture-cancel-btn').click();
+        answer({ name: 'Nutella', unitSize: 400, unitOfMeasure: 'g' });
+        later(function () {
+          same([$(doc, 'item-name').value, $(doc, 'item-unit-size').value], ['', ''], 'an answer that arrives after Cancel fills nothing');
+          check(!$(doc, 'capture-idle').hidden && $(doc, 'capture-status').hidden, 'Cancel brings the chips back');
+          setValue(doc, win, 'item-name', 'Jam');
+          setValue(doc, win, 'item-price', '10');
+          setValue(doc, win, 'item-unit-size', '1');
+          submit(doc, win);
+          check(B.recall(NUTELLA) === null, 'a cancelled barcode is not remembered');
+          next();
+        });
+      });
+    }
+  ];
+
+  function finish() {
+    restore(STATE_KEY, backupState);
+    restore(B.MEMORY_KEY, backupCodes);
+    summary.className = failed ? 'fail' : 'pass';
+    summary.textContent = failed ? (failed + ' of ' + total + ' FAILED') : ('ALL PASS (' + total + ' checks)');
+  }
+
+  (function run(i) {
+    if (i >= formTests.length) { finish(); return; }
+    try {
+      formTests[i](function () { run(i + 1); });
+    } catch (e) {
+      check(false, formTests[i].name + ' threw: ' + e.message);
+      run(i + 1);
+    }
+  })(0);
+})();
+</script>
+</body>
+</html>

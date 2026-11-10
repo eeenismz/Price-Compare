@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=5a3">
+<link rel="stylesheet" href="css/style.css?v=6a1">
 </head>
 <body>
 
@@ -72,8 +72,25 @@
             Scan price tag
           </button>
           <button type="button" class="chip-btn" id="upload-btn">Use a screenshot</button>
+          <button type="button" class="chip-btn" id="barcode-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+              <path d="M4 6v12M7.5 6v12M11 6v12M13.5 6v12M17 6v12M20 6v12"/>
+            </svg>
+            Scan barcode
+          </button>
         </div>
         <p class="capture-helper">Or paste a screenshot (&#8984;V / Ctrl+V). We fill what we can read; you check it.</p>
+      </div>
+
+      <!-- Barcode number entry: replaces the chips while open. A barcode fills name and size, never the price. -->
+      <div class="field barcode-entry" id="barcode-entry" hidden>
+        <label for="barcode-input">Barcode number</label>
+        <div class="barcode-entry-row">
+          <input type="text" id="barcode-input" inputmode="numeric" autocomplete="off" maxlength="24" placeholder="Digits under the bars" enterkeyhint="go" aria-describedby="barcode-error">
+          <button type="button" class="btn-status-sm" id="barcode-go">Look up</button>
+          <button type="button" class="btn-status-sm" id="barcode-cancel">Cancel</button>
+        </div>
+        <p class="field-error" id="barcode-error" hidden>That isn&rsquo;t a product barcode. Check the digits under the bars.</p>
       </div>
 
       <!-- Hidden file pickers: the chips and the dock camera call .click() on these -->
@@ -224,7 +241,8 @@
   <button type="button" id="toast-undo" class="toast-undo">Undo</button>
 </div>
 
-<script src="js/ocr-extract.js?v=5a3"></script>
-<script src="js/app.js?v=5a3"></script>
+<script src="js/ocr-extract.js?v=6a1"></script>
+<script src="js/barcode.js?v=6a1"></script>
+<script src="js/app.js?v=6a1"></script>
 </body>
 </html>
