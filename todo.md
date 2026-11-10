@@ -312,4 +312,3 @@ size and unit. The barcode never gives a price.
 ## Pending (not yet scheduled — out of scope for this pass per spec)
 - User accounts / login
 - Cross-store price history over time
-- Barcode scanning
